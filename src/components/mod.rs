@@ -7,6 +7,7 @@ mod commit;
 mod commit_details;
 mod commitlist;
 mod compare_commits;
+mod copy_popup;
 mod create_branch;
 mod cred;
 mod diff;

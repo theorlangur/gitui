@@ -6,6 +6,8 @@
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceRoot}/target/debug/gitui",
+            //"terminal": "external",
+            //"console": "externalTerminal",
             "args": [],
             "cwd": "${workspaceRoot}",
         }

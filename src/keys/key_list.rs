@@ -115,6 +115,11 @@ pub struct KeysList {
 	pub view_submodule_parent: GituiKeyEvent,
 	pub update_submodule: GituiKeyEvent,
 	pub commit_history_next: GituiKeyEvent,
+	pub copy_clipboard_sha: GituiKeyEvent,
+	pub copy_clipboard_email: GituiKeyEvent,
+	pub copy_clipboard_author: GituiKeyEvent,
+	pub copy_clipboard_message: GituiKeyEvent,
+	pub copy_clipboard_summary: GituiKeyEvent,
 }
 
 #[rustfmt::skip]
@@ -199,6 +204,11 @@ impl Default for KeysList {
 			view_submodule_parent: GituiKeyEvent::new(KeyCode::Char('p'),  KeyModifiers::empty()),
 			update_submodule: GituiKeyEvent::new(KeyCode::Char('u'),  KeyModifiers::empty()),
 			commit_history_next: GituiKeyEvent::new(KeyCode::Char('n'),  KeyModifiers::CONTROL),
+			copy_clipboard_sha: GituiKeyEvent::new(KeyCode::Char('s'),  KeyModifiers::empty()),
+			copy_clipboard_email: GituiKeyEvent::new(KeyCode::Char('e'),  KeyModifiers::empty()),
+			copy_clipboard_author: GituiKeyEvent::new(KeyCode::Char('a'),  KeyModifiers::empty()),
+			copy_clipboard_message: GituiKeyEvent::new(KeyCode::Char('m'),  KeyModifiers::empty()),
+			copy_clipboard_summary: GituiKeyEvent::new(KeyCode::Char('S'),  KeyModifiers::SHIFT),
 		}
 	}
 }
