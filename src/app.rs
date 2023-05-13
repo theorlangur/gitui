@@ -84,7 +84,7 @@ pub struct App {
 	rename_branch_popup: RenameBranchComponent,
 	select_branch_popup: BranchListComponent,
 	options_popup: OptionsPopupComponent,
-	copy_popup: CopyPopupComponent,
+	copy_clipboard_popup: CopyPopupComponent,
 	submodule_popup: SubmodulesListComponent,
 	tags_popup: TagListComponent,
 	reset_popup: ResetPopupComponent,
@@ -265,9 +265,10 @@ impl App {
 				key_config.clone(),
 				options.clone(),
 			),
-			copy_popup: CopyPopupComponent::new(
+			copy_clipboard_popup: CopyPopupComponent::new(
 				theme.clone(),
 				key_config.clone(),
+				repo.clone(),
 			),
 			submodule_popup: SubmodulesListComponent::new(
 				repo.clone(),
@@ -589,7 +590,7 @@ impl App {
 	accessors!(
 		self,
 		[
-			copy_popup,
+			copy_clipboard_popup,
 			find_file_popup,
 			branch_find_popup,
 			msg,
@@ -626,7 +627,7 @@ impl App {
 	setup_popups!(
 		self,
 		[
-			copy_popup,
+			copy_clipboard_popup,
 			commit,
 			stashmsg_popup,
 			help,
@@ -785,7 +786,7 @@ impl App {
 				self.compare_commits_popup.open(param)?;
 			}
 			StackablePopupOpen::CopyClipboardCommit(param) => {
-				self.copy_popup.open(param)?;
+				self.copy_clipboard_popup.open(param)?;
 			}
 		}
 

@@ -62,6 +62,8 @@ pub struct CommitInfo {
 	pub author: String,
 	///
 	pub id: CommitId,
+	///
+	pub email: String,
 }
 
 ///
@@ -83,15 +85,16 @@ pub fn get_commits_info(
 	let res = commits
 		.map(|c: Commit| {
 			let message = get_message(&c, Some(message_length_limit));
-			let author = c.author().name().map_or_else(
-				|| String::from("<unknown>"),
-				String::from,
-			);
+			let author =
+				c.author().name().unwrap_or("<unkown").to_owned();
+			let email =
+				c.author().email().unwrap_or("<no email>").to_owned();
 			CommitInfo {
 				message,
 				author,
 				time: c.time().seconds(),
 				id: CommitId(c.id()),
+				email,
 			}
 		})
 		.collect::<Vec<_>>();
@@ -116,6 +119,7 @@ pub fn get_commit_info(
 		author: author.name().unwrap_or("<unknown>").into(),
 		time: commit.time().seconds(),
 		id: CommitId(commit.id()),
+		email: author.email().unwrap_or("<no email>").into(),
 	})
 }
 

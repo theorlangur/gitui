@@ -9,7 +9,10 @@ use crate::{
 	ui::{self, style::SharedTheme},
 };
 use anyhow::Result;
-use asyncgit::sync::CommitId;
+use asyncgit::sync::{
+	get_commit_info, CommitId, CommitInfo, RepoPathRef,
+};
+use chrono::{DateTime, Local, NaiveDateTime, Utc};
 use crossterm::event::Event;
 use ratatui::{
 	backend::Backend,
@@ -28,6 +31,7 @@ pub struct CopyPopupComponent {
 	visible: bool,
 	key_config: SharedKeyConfig,
 	theme: SharedTheme,
+	repo: RepoPathRef,
 	copy_request: Option<CopyClipboardOpen>,
 }
 
@@ -36,11 +40,13 @@ impl CopyPopupComponent {
 	pub fn new(
 		theme: SharedTheme,
 		key_config: SharedKeyConfig,
+		repo: RepoPathRef,
 	) -> Self {
 		Self {
 			visible: false,
 			key_config,
 			theme,
+			repo,
 			copy_request: None,
 		}
 	}
@@ -52,6 +58,15 @@ impl CopyPopupComponent {
 		self.show()?;
 
 		Ok(())
+	}
+
+	fn get_commit(&mut self) -> &CommitId {
+		&self.copy_request.as_ref().unwrap().commit_id
+	}
+
+	fn get_commit_info(&mut self) -> Result<CommitInfo> {
+		let oid = &self.copy_request.as_ref().unwrap().commit_id;
+		Ok(get_commit_info(&self.repo.borrow(), oid)?)
 	}
 
 	fn get_text(&self, width: u16) -> Vec<Spans> {
@@ -192,27 +207,57 @@ impl Component for CopyPopupComponent {
 					key,
 					self.key_config.keys.copy_clipboard_sha,
 				) {
-					todo!("copy clipboard sha")
+					crate::clipboard::copy_string(
+						&self.get_commit().to_string(),
+					)?;
+					self.hide();
 				} else if key_match(
 					key,
 					self.key_config.keys.copy_clipboard_email,
 				) {
-					todo!("copy clipboard email")
+					crate::clipboard::copy_string(
+						&self.get_commit_info()?.email,
+					)?;
+					self.hide();
 				} else if key_match(
 					key,
 					self.key_config.keys.copy_clipboard_author,
 				) {
-					todo!("copy clipboard author")
+					crate::clipboard::copy_string(
+						&self.get_commit_info()?.author,
+					)?;
+					self.hide();
 				} else if key_match(
 					key,
 					self.key_config.keys.copy_clipboard_message,
 				) {
-					todo!("copy clipboard message")
+					crate::clipboard::copy_string(
+						&self.get_commit_info()?.message,
+					)?;
+					self.hide();
 				} else if key_match(
 					key,
 					self.key_config.keys.copy_clipboard_summary,
 				) {
-					todo!("copy clipboard summary")
+					let i = self.get_commit_info()?;
+					let date =
+						NaiveDateTime::from_timestamp_opt(i.time, 0);
+					let dt = DateTime::<Local>::from(
+						DateTime::<Utc>::from_utc(
+							date.unwrap_or_default(),
+							Utc,
+						),
+					);
+					let summary = format!(
+						"SHA: {}\nAuthor: {} <{}>\nDate: {}\n\n{}",
+						self.get_commit().to_string(),
+						i.author,
+						i.email,
+						dt,
+						i.message
+					);
+					crate::clipboard::copy_string(&summary)?;
+					self.hide();
 				}
 			}
 
