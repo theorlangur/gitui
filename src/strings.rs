@@ -31,7 +31,7 @@ pub static POPUP_TITLE_SUBMODULES: &str = "Submodules";
 pub static POPUP_TITLE_FUZZY_FIND: &str = "Fuzzy Finder";
 
 pub static POPUP_FAIL_COPY: &str = "Failed to copy text";
-pub static POPUP_SUCCESS_COPY: &str = "Copied Text";
+//pub static POPUP_SUCCESS_COPY: &str = "Copied Text";
 
 pub mod symbol {
 	pub const WHITESPACE: &str = "\u{00B7}"; //·
@@ -354,9 +354,9 @@ pub fn rename_branch_popup_msg(
 	"new branch name".to_string()
 }
 
-pub fn copy_success(s: &str) -> String {
-	format!("{POPUP_SUCCESS_COPY} \"{s}\"")
-}
+//pub fn copy_success(s: &str) -> String {
+//	format!("{POPUP_SUCCESS_COPY} \"{s}\"")
+//}
 
 pub fn ellipsis_trim_start(s: &str, width: usize) -> Cow<str> {
 	if s.width() <= width {
@@ -561,13 +561,80 @@ pub mod commands {
 			CMD_GROUP_DIFF,
 		)
 	}
-	pub fn copy_hash(key_config: &SharedKeyConfig) -> CommandText {
+	pub fn copy_clipboard_info(
+		key_config: &SharedKeyConfig,
+	) -> CommandText {
 		CommandText::new(
 			format!(
-				"Copy Hash [{}]",
+				"Copy Info [{}]",
 				key_config.get_hint(key_config.keys.copy),
 			),
-			"copy selected commit hash to clipboard",
+			"copy selected commit info to clipboard",
+			CMD_GROUP_LOG,
+		)
+	}
+	pub fn copy_clipboard_sha(
+		key_config: &SharedKeyConfig,
+	) -> CommandText {
+		CommandText::new(
+			format!(
+				"Copy SHA [{}]",
+				key_config
+					.get_hint(key_config.keys.copy_clipboard_sha),
+			),
+			"copy SHA of the selected commit into clipboard",
+			CMD_GROUP_LOG,
+		)
+	}
+	pub fn copy_clipboard_email(
+		key_config: &SharedKeyConfig,
+	) -> CommandText {
+		CommandText::new(
+			format!(
+				"Copy E-Mail [{}]",
+				key_config
+					.get_hint(key_config.keys.copy_clipboard_email),
+			),
+			"copy e-mail of the selected commit into clipboard",
+			CMD_GROUP_LOG,
+		)
+	}
+	pub fn copy_clipboard_author(
+		key_config: &SharedKeyConfig,
+	) -> CommandText {
+		CommandText::new(
+			format!(
+				"Copy Author [{}]",
+				key_config
+					.get_hint(key_config.keys.copy_clipboard_author),
+			),
+			"copy author of the selected commit into clipboard",
+			CMD_GROUP_LOG,
+		)
+	}
+	pub fn copy_clipboard_message(
+		key_config: &SharedKeyConfig,
+	) -> CommandText {
+		CommandText::new(
+			format!(
+				"Copy Message [{}]",
+				key_config
+					.get_hint(key_config.keys.copy_clipboard_message),
+			),
+			"copy message of the selected commit into clipboard",
+			CMD_GROUP_LOG,
+		)
+	}
+	pub fn copy_clipboard_summary(
+		key_config: &SharedKeyConfig,
+	) -> CommandText {
+		CommandText::new(
+			format!(
+				"Copy Summary [{}]",
+				key_config
+					.get_hint(key_config.keys.copy_clipboard_summary),
+			),
+			"copy summary of the selected commit into clipboard",
 			CMD_GROUP_LOG,
 		)
 	}

@@ -5,12 +5,13 @@ use crate::{
 		event_pump, AppOption, BlameFileComponent, BranchFindPopup,
 		BranchListComponent, CommandBlocking, CommandInfo,
 		CommitComponent, CompareCommitsComponent, Component,
-		ConfirmComponent, CreateBranchComponent, DrawableComponent,
-		ExternalEditorComponent, FetchComponent, FileFindPopup,
-		FileRevlogComponent, HelpComponent, InspectCommitComponent,
-		MsgComponent, OptionsPopupComponent, PullComponent,
-		PushComponent, PushTagsComponent, RenameBranchComponent,
-		ResetPopupComponent, RevisionFilesPopup, StashMsgComponent,
+		ConfirmComponent, CopyPopupComponent, CreateBranchComponent,
+		DrawableComponent, ExternalEditorComponent, FetchComponent,
+		FileFindPopup, FileRevlogComponent, HelpComponent,
+		InspectCommitComponent, MsgComponent, OptionsPopupComponent,
+		PullComponent, PushComponent, PushTagsComponent,
+		RenameBranchComponent, ResetPopupComponent,
+		RevisionFilesPopup, StashMsgComponent,
 		SubmodulesListComponent, TagCommitComponent,
 		TagListComponent,
 	},
@@ -83,6 +84,7 @@ pub struct App {
 	rename_branch_popup: RenameBranchComponent,
 	select_branch_popup: BranchListComponent,
 	options_popup: OptionsPopupComponent,
+	copy_popup: CopyPopupComponent,
 	submodule_popup: SubmodulesListComponent,
 	tags_popup: TagListComponent,
 	reset_popup: ResetPopupComponent,
@@ -262,6 +264,10 @@ impl App {
 				theme.clone(),
 				key_config.clone(),
 				options.clone(),
+			),
+			copy_popup: CopyPopupComponent::new(
+				theme.clone(),
+				key_config.clone(),
 			),
 			submodule_popup: SubmodulesListComponent::new(
 				repo.clone(),
@@ -583,6 +589,7 @@ impl App {
 	accessors!(
 		self,
 		[
+			copy_popup,
 			find_file_popup,
 			branch_find_popup,
 			msg,
@@ -619,6 +626,7 @@ impl App {
 	setup_popups!(
 		self,
 		[
+			copy_popup,
 			commit,
 			stashmsg_popup,
 			help,
@@ -775,6 +783,9 @@ impl App {
 			}
 			StackablePopupOpen::CompareCommits(param) => {
 				self.compare_commits_popup.open(param)?;
+			}
+			StackablePopupOpen::CopyClipboardCommit(param) => {
+				self.copy_popup.open(param)?;
 			}
 		}
 

@@ -5,7 +5,7 @@ use crate::{
 		Component, DrawableComponent, EventState, ScrollType,
 	},
 	keys::{key_match, SharedKeyConfig},
-	queue::{InternalEvent, Queue},
+	queue::Queue,
 	strings::{self, symbol},
 	try_or_popup,
 	ui::style::{SharedTheme, Theme},
@@ -160,7 +160,7 @@ impl CommitList {
 		commits
 	}
 
-	pub fn copy_commit_hash(&self) -> Result<()> {
+	/*pub fn copy_commit_hash(&self) -> Result<()> {
 		let marked = self.marked.as_slice();
 		let yank: Option<Cow<str>> = match marked {
 			[] => self
@@ -204,6 +204,7 @@ impl CommitList {
 		}
 		Ok(())
 	}
+	*/
 
 	fn move_selection(&mut self, scroll: ScrollType) -> Result<bool> {
 		self.update_scroll_speed();

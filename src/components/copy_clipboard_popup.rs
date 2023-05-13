@@ -9,20 +9,26 @@ use crate::{
 	ui::{self, style::SharedTheme},
 };
 use anyhow::Result;
+use asyncgit::sync::CommitId;
 use crossterm::event::Event;
 use ratatui::{
 	backend::Backend,
 	layout::{Alignment, Rect},
-	style::{Modifier, Style},
 	text::{Span, Spans},
 	widgets::{Block, Borders, Clear, Paragraph},
 	Frame,
 };
 
+#[derive(Debug)]
+pub struct CopyClipboardOpen {
+	pub commit_id: CommitId,
+}
+
 pub struct CopyPopupComponent {
 	visible: bool,
 	key_config: SharedKeyConfig,
 	theme: SharedTheme,
+	copy_request: Option<CopyClipboardOpen>,
 }
 
 impl CopyPopupComponent {
@@ -35,7 +41,17 @@ impl CopyPopupComponent {
 			visible: false,
 			key_config,
 			theme,
+			copy_request: None,
 		}
+	}
+
+	pub fn open(&mut self, copy: CopyClipboardOpen) -> Result<()> {
+		self.copy_request = Some(CopyClipboardOpen {
+			commit_id: copy.commit_id,
+		});
+		self.show()?;
+
+		Ok(())
 	}
 
 	fn get_text(&self, width: u16) -> Vec<Spans> {
@@ -46,16 +62,8 @@ impl CopyPopupComponent {
 		txt
 	}
 
-	fn add_header(txt: &mut Vec<Spans>, header: &'static str) {
-		txt.push(Spans::from(vec![Span::styled(
-			header,
-			//TODO: use style
-			Style::default().add_modifier(Modifier::UNDERLINED),
-		)]));
-	}
-
 	fn add_status(&self, txt: &mut Vec<Spans>, width: u16) {
-		Self::add_header(txt, "Copy");
+		txt.push(Spans::from(vec![Span::raw("")]));
 
 		self.add_action(txt, width, "s", "Copy SHA");
 		self.add_action(txt, width, "e", "Copy e-mail");
@@ -106,7 +114,7 @@ impl DrawableComponent for CopyPopupComponent {
 						Block::default()
 							.borders(Borders::ALL)
 							.title(Span::styled(
-								"Options",
+								"Copy",
 								self.theme.title(true),
 							))
 							.border_style(self.theme.block(true)),
@@ -127,24 +135,46 @@ impl Component for CopyPopupComponent {
 		force_all: bool,
 	) -> CommandBlocking {
 		if self.is_visible() || force_all {
-			out.push(
-				CommandInfo::new(
-					strings::commands::close_popup(&self.key_config),
-					true,
-					true,
-				)
-				.order(1),
-			);
-			out.push(
-				CommandInfo::new(
-					strings::commands::navigate_tree(
-						&self.key_config,
-					),
-					true,
-					true,
-				)
-				.order(1),
-			);
+			out.push(CommandInfo::new(
+				strings::commands::close_popup(&self.key_config),
+				true,
+				true,
+			));
+			out.push(CommandInfo::new(
+				strings::commands::copy_clipboard_sha(
+					&self.key_config,
+				),
+				true,
+				true,
+			));
+			out.push(CommandInfo::new(
+				strings::commands::copy_clipboard_email(
+					&self.key_config,
+				),
+				true,
+				true,
+			));
+			out.push(CommandInfo::new(
+				strings::commands::copy_clipboard_author(
+					&self.key_config,
+				),
+				true,
+				true,
+			));
+			out.push(CommandInfo::new(
+				strings::commands::copy_clipboard_message(
+					&self.key_config,
+				),
+				true,
+				true,
+			));
+			out.push(CommandInfo::new(
+				strings::commands::copy_clipboard_summary(
+					&self.key_config,
+				),
+				true,
+				true,
+			));
 		}
 
 		visibility_blocking(self)

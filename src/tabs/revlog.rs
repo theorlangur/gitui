@@ -2,8 +2,8 @@ use crate::{
 	components::{
 		visibility_blocking, CommandBlocking, CommandInfo,
 		CommitDetailsComponent, CommitList, Component,
-		DrawableComponent, EventState, FileTreeOpen,
-		InspectCommitOpen,
+		CopyClipboardOpen, DrawableComponent, EventState,
+		FileTreeOpen, InspectCommitOpen,
 	},
 	keys::{key_match, SharedKeyConfig},
 	queue::{InternalEvent, Queue, StackablePopupOpen},
@@ -282,12 +282,24 @@ impl Component for Revlog {
 					self.update()?;
 					return Ok(EventState::Consumed);
 				} else if key_match(k, self.key_config.keys.copy) {
-					try_or_popup!(
+					/*try_or_popup!(
 						self,
 						strings::POPUP_FAIL_COPY,
 						self.list.copy_commit_hash()
+					);*/
+					return self.selected_commit().map_or(
+						Ok(EventState::NotConsumed),
+						|id| {
+							self.queue.push(
+								InternalEvent::OpenPopup(
+									StackablePopupOpen::CopyClipboardCommit(
+										CopyClipboardOpen{commit_id: id},
+									),
+								),
+							);
+							Ok(EventState::Consumed)
+						},
 					);
-					return Ok(EventState::Consumed);
 				} else if key_match(k, self.key_config.keys.push) {
 					self.queue.push(InternalEvent::PushTags);
 					return Ok(EventState::Consumed);
@@ -454,7 +466,7 @@ impl Component for Revlog {
 		));
 
 		out.push(CommandInfo::new(
-			strings::commands::copy_hash(&self.key_config),
+			strings::commands::copy_clipboard_info(&self.key_config),
 			self.selected_commit().is_some(),
 			self.visible || force_all,
 		));

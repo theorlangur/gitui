@@ -7,7 +7,7 @@ mod commit;
 mod commit_details;
 mod commitlist;
 mod compare_commits;
-mod copy_popup;
+mod copy_clipboard_popup;
 mod create_branch;
 mod cred;
 mod diff;
@@ -46,6 +46,9 @@ pub use commit::CommitComponent;
 pub use commit_details::CommitDetailsComponent;
 pub use commitlist::CommitList;
 pub use compare_commits::CompareCommitsComponent;
+pub use copy_clipboard_popup::{
+	CopyClipboardOpen, CopyPopupComponent,
+};
 pub use create_branch::CreateBranchComponent;
 pub use diff::DiffComponent;
 pub use externaleditor::ExternalEditorComponent;

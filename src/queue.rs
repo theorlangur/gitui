@@ -1,7 +1,7 @@
 use crate::{
 	components::{
-		AppOption, BlameFileOpen, FileRevOpen, FileTreeOpen,
-		InspectCommitOpen,
+		AppOption, BlameFileOpen, CopyClipboardOpen, FileRevOpen,
+		FileTreeOpen, InspectCommitOpen,
 	},
 	tabs::StashingOptions,
 };
@@ -66,6 +66,8 @@ pub enum StackablePopupOpen {
 	InspectCommit(InspectCommitOpen),
 	///
 	CompareCommits(InspectCommitOpen),
+	///
+	CopyClipboardCommit(CopyClipboardOpen),
 }
 
 ///
