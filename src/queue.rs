@@ -86,6 +86,8 @@ pub enum InternalEvent {
 	StatusLastFileMoved,
 	/// open commit msg input
 	OpenCommit,
+	/// open external editor to edit commit msg and commit
+	CommitWithExternalEditor,
 	///
 	PopupStashing(StashingOptions),
 	///

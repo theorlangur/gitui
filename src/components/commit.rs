@@ -1,7 +1,12 @@
 use super::{
-	textinput::TextInputComponent, visibility_blocking,
-	CommandBlocking, CommandInfo, Component, DrawableComponent,
-	EventState, ExternalEditorComponent,
+	textinput::TextInputComponent,
+	visibility_blocking,
+	CommandBlocking,
+	CommandInfo,
+	Component,
+	DrawableComponent,
+	EventState,
+	ExternalEditorComponent, //, ExternalEditorComponent,
 };
 use crate::{
 	keys::{key_match, SharedKeyConfig},
@@ -156,10 +161,10 @@ impl CommitComponent {
 		}
 	}
 
-	pub fn show_editor(
+	pub fn edit_message_with_editor(
 		&mut self,
 		changes: Vec<StatusItem>,
-	) -> Result<()> {
+	) -> Result<Option<String>> {
 		let file_path = sync::repo_dir(&self.repo.borrow())?
 			.join("COMMIT_EDITMSG");
 
@@ -198,9 +203,36 @@ impl CommitComponent {
 		std::fs::remove_file(&file_path)?;
 
 		message = message_prettify(message, Some(b'#'))?;
-		self.input.set_text(message);
-		self.input.show()?;
+		if !message.is_empty() {
+			Ok(Some(message))
+		} else {
+			Ok(None)
+		}
+	}
 
+	pub fn show_editor(
+		&mut self,
+		changes: Vec<StatusItem>,
+	) -> Result<()> {
+		if let Some(message) =
+			self.edit_message_with_editor(changes)?
+		{
+			self.input.set_text(message);
+			self.input.show()?;
+		}
+		Ok(())
+	}
+
+	pub fn commit_with_external_editor(
+		&mut self,
+		changes: Vec<StatusItem>,
+	) -> Result<()> {
+		if let Some(message) =
+			self.edit_message_with_editor(changes)?
+		{
+			self.input.set_text(message);
+			self.commit()?;
+		}
 		Ok(())
 	}
 

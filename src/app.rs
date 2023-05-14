@@ -58,6 +58,13 @@ pub enum QuitState {
 	OpenSubmodule(RepoPath),
 }
 
+enum ExternalEditorRequest {
+	None,
+	ExternalEditorWithPath(String),
+	ShowEditor,
+	EditorToCommit,
+}
+
 /// the main app type
 pub struct App {
 	repo: RepoPathRef,
@@ -105,7 +112,7 @@ pub struct App {
 
 	// "Flags"
 	requires_redraw: Cell<bool>,
-	file_to_open: Option<String>,
+	external_editor_request: ExternalEditorRequest,
 }
 
 // public interface
@@ -338,7 +345,7 @@ impl App {
 			options,
 			key_config,
 			requires_redraw: Cell::new(false),
-			file_to_open: None,
+			external_editor_request: ExternalEditorRequest::None,
 			repo,
 			repo_path_text,
 			popup_stack: PopupStack::default(),
@@ -466,17 +473,27 @@ impl App {
 		} else if let InputEvent::State(polling_state) = ev {
 			self.external_editor_popup.hide();
 			if matches!(polling_state, InputState::Paused) {
-				let result =
-					if let Some(path) = self.file_to_open.take() {
-						ExternalEditorComponent::open_file_in_editor(
-							&self.repo.borrow(),
-							Path::new(&path),
-						)
-					} else {
+				let result = match &self.external_editor_request {
+					ExternalEditorRequest::None => Ok(()),
+					ExternalEditorRequest::ExternalEditorWithPath(
+						path,
+					) => ExternalEditorComponent::open_file_in_editor(
+						&self.repo.borrow(),
+						Path::new(&path),
+					),
+					ExternalEditorRequest::ShowEditor => {
 						let changes =
 							self.status_tab.get_files_changes()?;
 						self.commit.show_editor(changes)
-					};
+					}
+					ExternalEditorRequest::EditorToCommit => {
+						self.commit.commit_with_external_editor(
+							self.status_tab.get_files_changes()?,
+						)
+					}
+				};
+				self.external_editor_request =
+					ExternalEditorRequest::None;
 
 				if let Err(e) = result {
 					let msg =
@@ -835,6 +852,12 @@ impl App {
 			}
 			InternalEvent::Update(u) => flags.insert(u),
 			InternalEvent::OpenCommit => self.commit.show()?,
+			InternalEvent::CommitWithExternalEditor => {
+				self.input.set_polling(false);
+				self.external_editor_request =
+					ExternalEditorRequest::EditorToCommit;
+				flags.insert(NeedsUpdate::COMMANDS);
+			}
 			InternalEvent::RewordCommit(id) => {
 				self.commit.open(Some(id))?;
 			}
@@ -876,7 +899,14 @@ impl App {
 			InternalEvent::OpenExternalEditor(path) => {
 				self.input.set_polling(false);
 				self.external_editor_popup.show()?;
-				self.file_to_open = path;
+				self.external_editor_request =
+					if let Some(path) = path {
+						ExternalEditorRequest::ExternalEditorWithPath(
+							path,
+						)
+					} else {
+						ExternalEditorRequest::ShowEditor
+					};
 				flags.insert(NeedsUpdate::COMMANDS);
 			}
 			InternalEvent::Push(branch, push_type, force, delete) => {

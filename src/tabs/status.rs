@@ -747,6 +747,16 @@ impl Component for Status {
 				.order(-1),
 			);
 
+			out.push(
+				CommandInfo::new(
+					strings::commands::commit_with_editor(
+						&self.key_config,
+					),
+					true,
+					self.can_commit() || force_all,
+				), //.order(-1),
+			);
+
 			out.push(CommandInfo::new(
 				strings::commands::open_branch_select_popup(
 					&self.key_config,
@@ -842,6 +852,15 @@ impl Component for Status {
 				) && self.can_commit()
 				{
 					self.queue.push(InternalEvent::OpenCommit);
+					Ok(EventState::Consumed)
+				} else if key_match(
+					k,
+					self.key_config.keys.commit_with_editor,
+				) && self.can_commit()
+				{
+					self.queue.push(
+						InternalEvent::CommitWithExternalEditor,
+					);
 					Ok(EventState::Consumed)
 				} else if key_match(
 					k,

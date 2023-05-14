@@ -960,6 +960,18 @@ pub mod commands {
 			CMD_GROUP_GENERAL,
 		)
 	}
+	pub fn commit_with_editor(
+		key_config: &SharedKeyConfig,
+	) -> CommandText {
+		CommandText::new(
+			format!(
+				"Commit with Editor [{}]",
+				key_config.get_hint(key_config.keys.commit_with_editor),
+			),
+			"open external editor to set the commit message and perform the commit",
+			CMD_GROUP_GENERAL,
+		)
+	}
 	pub fn commit_open_editor(
 		key_config: &SharedKeyConfig,
 	) -> CommandText {
