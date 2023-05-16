@@ -754,7 +754,8 @@ impl Component for Status {
 					),
 					true,
 					self.can_commit() || force_all,
-				), //.order(-1),
+				)
+				.order(-1),
 			);
 
 			out.push(CommandInfo::new(
