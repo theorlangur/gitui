@@ -6,12 +6,12 @@ use crate::{
 		BranchListComponent, CommandBlocking, CommandInfo,
 		CommitComponent, CompareCommitsComponent, Component,
 		ConfirmComponent, CopyPopupComponent, CreateBranchComponent,
-		DrawableComponent, ExternalEditorComponent, FetchComponent,
-		FileFindPopup, FileRevlogComponent, HelpComponent,
-		InspectCommitComponent, MsgComponent, OptionsPopupComponent,
-		PullComponent, PushComponent, PushTagsComponent,
-		RenameBranchComponent, ResetPopupComponent,
-		RevisionFilesPopup, StashMsgComponent,
+		DrawableComponent, ExternalCommandPopupComponent,
+		ExternalEditorComponent, FetchComponent, FileFindPopup,
+		FileRevlogComponent, HelpComponent, InspectCommitComponent,
+		MsgComponent, OptionsPopupComponent, PullComponent,
+		PushComponent, PushTagsComponent, RenameBranchComponent,
+		ResetPopupComponent, RevisionFilesPopup, StashMsgComponent,
 		SubmodulesListComponent, TagCommitComponent,
 		TagListComponent,
 	},
@@ -92,6 +92,7 @@ pub struct App {
 	select_branch_popup: BranchListComponent,
 	options_popup: OptionsPopupComponent,
 	copy_clipboard_popup: CopyPopupComponent,
+	external_command_popup: ExternalCommandPopupComponent,
 	submodule_popup: SubmodulesListComponent,
 	tags_popup: TagListComponent,
 	reset_popup: ResetPopupComponent,
@@ -277,6 +278,12 @@ impl App {
 				key_config.clone(),
 				repo.clone(),
 			),
+			external_command_popup:
+				ExternalCommandPopupComponent::new(
+					theme.clone(),
+					key_config.clone(),
+					queue.clone(),
+				),
 			submodule_popup: SubmodulesListComponent::new(
 				repo.clone(),
 				&queue,
@@ -462,6 +469,12 @@ impl App {
 				) {
 					self.options_popup.show()?;
 					NeedsUpdate::ALL
+				} else if key_match(
+					k,
+					self.key_config.keys.run_external_command,
+				) {
+					self.external_command_popup.show()?;
+					NeedsUpdate::ALL
 				} else {
 					NeedsUpdate::empty()
 				};
@@ -608,6 +621,7 @@ impl App {
 		self,
 		[
 			copy_clipboard_popup,
+			external_command_popup,
 			find_file_popup,
 			branch_find_popup,
 			msg,
@@ -645,6 +659,7 @@ impl App {
 		self,
 		[
 			copy_clipboard_popup,
+			external_command_popup,
 			commit,
 			stashmsg_popup,
 			help,

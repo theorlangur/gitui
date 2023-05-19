@@ -916,6 +916,28 @@ pub mod commands {
 		)
 	}
 
+	pub fn switch_focus(key_config: &SharedKeyConfig) -> CommandText {
+		CommandText::new(
+			format!(
+				"Switch focus [{}]",
+				key_config.get_hint(key_config.keys.toggle_workarea),
+			),
+			"Switch active area",
+			CMD_GROUP_GENERAL,
+		)
+	}
+	pub fn execute_command(
+		key_config: &SharedKeyConfig,
+	) -> CommandText {
+		CommandText::new(
+			format!(
+				"Exec cmd [{}]",
+				key_config.get_hint(key_config.keys.enter),
+			),
+			"Execute command",
+			CMD_GROUP_GENERAL,
+		)
+	}
 	pub fn select_staging(
 		key_config: &SharedKeyConfig,
 	) -> CommandText {

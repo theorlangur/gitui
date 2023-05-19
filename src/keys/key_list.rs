@@ -121,6 +121,7 @@ pub struct KeysList {
 	pub copy_clipboard_author: GituiKeyEvent,
 	pub copy_clipboard_message: GituiKeyEvent,
 	pub copy_clipboard_summary: GituiKeyEvent,
+	pub run_external_command: GituiKeyEvent,
 }
 
 #[rustfmt::skip]
@@ -211,6 +212,7 @@ impl Default for KeysList {
 			copy_clipboard_author: GituiKeyEvent::new(KeyCode::Char('a'),  KeyModifiers::empty()),
 			copy_clipboard_message: GituiKeyEvent::new(KeyCode::Char('m'),  KeyModifiers::empty()),
 			copy_clipboard_summary: GituiKeyEvent::new(KeyCode::Char('S'),  KeyModifiers::SHIFT),
+			run_external_command: GituiKeyEvent::new(KeyCode::Char(':'),  KeyModifiers::empty()),
 		}
 	}
 }

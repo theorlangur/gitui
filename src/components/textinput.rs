@@ -98,6 +98,11 @@ impl TextInputComponent {
 		self.embed = true;
 	}
 
+	pub fn make_embed(mut self) -> Self {
+		self.embed = true;
+		self
+	}
+
 	/// Move the cursor right one char.
 	fn incr_cursor(&mut self) {
 		if let Some(pos) = self.next_char_position() {

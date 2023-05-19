@@ -11,6 +11,7 @@ mod copy_clipboard_popup;
 mod create_branch;
 mod cred;
 mod diff;
+mod external_command_popup;
 mod externaleditor;
 mod fetch;
 mod file_find_popup;
@@ -51,6 +52,7 @@ pub use copy_clipboard_popup::{
 };
 pub use create_branch::CreateBranchComponent;
 pub use diff::DiffComponent;
+pub use external_command_popup::ExternalCommandPopupComponent;
 pub use externaleditor::ExternalEditorComponent;
 pub use fetch::FetchComponent;
 pub use file_find_popup::FileFindPopup;
