@@ -3,23 +3,24 @@ use std::{
 };
 
 use super::{
-	visibility_blocking, CommandBlocking, CommandInfo, Component,
-	DrawableComponent, EventState, TextInputComponent,
+	utils::string_width_align, visibility_blocking, CommandBlocking,
+	CommandInfo, Component, DrawableComponent, EventState,
+	TextInputComponent,
 };
 use crate::{
 	//components::utils::string_width_align,
-	keys::{key_match, SharedKeyConfig},
+	keys::{key_match, GituiKeyEvent, SharedKeyConfig},
 	options::SharedOptions,
 	queue::Queue,
 	strings::{self},
 	ui::{self, style::SharedTheme},
 };
 use anyhow::Result;
-use crossterm::event::Event;
+use crossterm::event::{Event, KeyCode, KeyModifiers};
 use ratatui::{
 	backend::Backend,
 	layout::{/*Alignment,*/ Constraint, Layout, Margin, Rect},
-	text::Span,
+	text::{Span, Spans},
 	widgets::{Block, Borders, Clear /*, Paragraph*/},
 	Frame,
 };
@@ -76,12 +77,12 @@ impl ExternalCommandPopupComponent {
 
 	fn exec_command(
 		&self,
+		cmd: &str,
 	) -> Result<std::process::Output, std::io::Error> {
 		/*io::stdout().execute(LeaveAlternateScreen)?;
 		defer! {
 			io::stdout().execute(EnterAlternateScreen).expect("reset terminal");
 		}*/
-		let cmd = self.cmdline.get_text();
 		self.options.borrow_mut().add_extern_command(cmd);
 		self.do_exec_command(cmd)
 	}
@@ -100,6 +101,47 @@ impl ExternalCommandPopupComponent {
 		cmd: &str,
 	) -> Result<std::process::Output, std::io::Error> {
 		Command::new("cmd.exe").args(["/C", cmd]).output()
+	}
+
+	fn run_command_ui(&self, cmd: &str) {
+		let _res = self.exec_command(cmd);
+		if let Err(e) = _res {
+			self.queue.push(
+				crate::queue::InternalEvent::ShowErrorMsg(format!(
+					"{}\n{}",
+					"Command failed", e
+				)),
+			);
+		} else {
+			let o = _res.unwrap();
+			if !o.stderr.is_empty() {
+				self.queue.push(
+					crate::queue::InternalEvent::ShowErrorMsg(
+						format!(
+							"{}",
+							std::ffi::OsStr::from_bytes(
+								o.stderr.as_slice()
+							)
+							.to_str()
+							.unwrap_or_default()
+						),
+					),
+				);
+			} else {
+				self.queue.push(
+					crate::queue::InternalEvent::ShowInfoMsg(
+						format!(
+							"{}",
+							std::ffi::OsStr::from_bytes(
+								o.stdout.as_slice()
+							)
+							.to_str()
+							.unwrap_or_default()
+						),
+					),
+				);
+			}
+		}
 	}
 }
 
@@ -149,6 +191,8 @@ impl DrawableComponent for ExternalCommandPopupComponent {
 			} else if (*vis_idx + xh) <= self.selected_idx {
 				*vis_idx = self.selected_idx - xh + 1;
 			}
+			drop(vis_idx);
+			let vis_idx = *self.visible_idx.borrow();
 
 			let w = v_blocks[1].width;
 			let opts = self.options.borrow();
@@ -156,7 +200,7 @@ impl DrawableComponent for ExternalCommandPopupComponent {
 				.extern_commands()
 				.iter()
 				.enumerate()
-				.skip(*vis_idx)
+				.skip(vis_idx)
 				.take(xh)
 				.map(|i| {
 					let s = if i.1.len() <= w.into() {
@@ -171,7 +215,44 @@ impl DrawableComponent for ExternalCommandPopupComponent {
 					} else {
 						false
 					};
-					Span::styled(s, self.theme.text(true, selected))
+
+					const KEY_WIDTH: usize = 4;
+					let mut relative_visible_idx = i.0 - vis_idx;
+					if relative_visible_idx < 10 {
+						relative_visible_idx =
+							(relative_visible_idx + 1) % 10;
+						let key = GituiKeyEvent::new(
+							KeyCode::Char(
+								('0' as u8
+									+ relative_visible_idx as u8) as char,
+							),
+							KeyModifiers::ALT,
+						);
+						Spans::from(vec![
+							Span::styled(
+								string_width_align(
+									&self.key_config.get_hint(key),
+									KEY_WIDTH,
+								),
+								self.theme.text(true, selected),
+							),
+							Span::styled(
+								s,
+								self.theme.text(true, selected),
+							),
+						])
+					} else {
+						Spans::from(vec![
+							Span::styled(
+								string_width_align(" ", KEY_WIDTH),
+								self.theme.text(true, selected),
+							),
+							Span::styled(
+								s,
+								self.theme.text(true, selected),
+							),
+						])
+					}
 				});
 
 			ui::draw_list_block(
@@ -213,6 +294,11 @@ impl Component for ExternalCommandPopupComponent {
 				true,
 				true,
 			));
+			out.push(CommandInfo::new(
+				strings::commands::delete_command(&self.key_config),
+				true,
+				self.focused == Focused::List,
+			));
 		}
 
 		visibility_blocking(self)
@@ -239,43 +325,13 @@ impl Component for ExternalCommandPopupComponent {
 					true
 				} else if key_match(key, self.key_config.keys.enter) {
 					if self.focused == Focused::List {
-						self.cmdline.set_text(
+						let cmdstr =
 							self.options.borrow().extern_commands()
 								[self.selected_idx]
-								.clone(),
-						);
-					}
-					let _res = self.exec_command();
-					if let Err(e) = _res {
-						self.queue.push(
-							crate::queue::InternalEvent::ShowErrorMsg(
-								format!(
-									"{}\n{}",
-									"Command failed", e
-								),
-							),
-						);
+								.clone();
+						self.run_command_ui(&cmdstr);
 					} else {
-						let o = _res.unwrap();
-						if !o.stderr.is_empty() {
-							self.queue.push(
-                                crate::queue::InternalEvent::ShowErrorMsg(
-                                    format!(
-                                        "{}",
-										std::ffi::OsStr::from_bytes(o.stderr.as_slice()).to_str().unwrap_or_default()
-                                    ),
-                                ),
-                            );
-						} else {
-							self.queue.push(
-                                crate::queue::InternalEvent::ShowInfoMsg(
-                                    format!(
-                                        "{}",
-										std::ffi::OsStr::from_bytes(o.stdout.as_slice()).to_str().unwrap_or_default()
-                                    ),
-                                ),
-                            );
-						}
+						self.run_command_ui(&self.cmdline.get_text());
 					}
 					self.hide();
 					true
@@ -306,6 +362,40 @@ impl Component for ExternalCommandPopupComponent {
 							self.selected_idx -= 1;
 						}
 						true
+					} else if key_match(
+						key,
+						self.key_config.keys.delete_generic,
+					) {
+						self.selected_idx = self
+							.options
+							.borrow_mut()
+							.remove_extern_command(self.selected_idx);
+						true
+					} else {
+						false
+					}
+				} else if let KeyCode::Char(c) = key.code {
+					if c >= '0'
+						&& c <= '9' && key.modifiers
+						== KeyModifiers::ALT
+					{
+						//run command
+						let visible_offset =
+							((c as u8 - '0' as u8) + 9) % 10;
+						let opts = self.options.borrow();
+						let extern_commands = opts.extern_commands();
+						let cmd_idx = *self.visible_idx.borrow()
+							+ visible_offset as usize;
+						if cmd_idx < extern_commands.len() {
+							let cmdstr =
+								extern_commands[cmd_idx].clone();
+							drop(opts);
+							self.run_command_ui(&cmdstr);
+							self.hide();
+							true
+						} else {
+							false
+						}
 					} else {
 						false
 					}

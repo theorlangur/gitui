@@ -101,6 +101,20 @@ impl Options {
 		&self.data.extern_cmds
 	}
 
+	pub fn remove_extern_command(&mut self, idx: usize) -> usize {
+		if idx < self.data.extern_cmds.len() {
+			self.data.extern_cmds.remove(idx);
+			self.save();
+			if idx == self.data.extern_cmds.len() {
+				idx.saturating_sub(1)
+			} else {
+				idx
+			}
+		} else {
+			0
+		}
+	}
+
 	pub fn add_extern_command(&mut self, cmd: &str) {
 		let existing = self
 			.data
@@ -108,14 +122,11 @@ impl Options {
 			.iter()
 			.enumerate()
 			.find(|i| i.1 == cmd);
-		if let Some((idx, _)) = existing {
-			let s = self.data.extern_cmds.remove(idx);
-			self.data.extern_cmds.insert(0, s);
-		} else {
+		if existing.is_none() {
 			//add new
 			self.data.extern_cmds.insert(0, cmd.to_string());
+			self.save();
 		}
-		self.save();
 	}
 
 	pub fn add_commit_msg(&mut self, msg: &str) {

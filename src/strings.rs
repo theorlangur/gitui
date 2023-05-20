@@ -938,6 +938,18 @@ pub mod commands {
 			CMD_GROUP_GENERAL,
 		)
 	}
+	pub fn delete_command(
+		key_config: &SharedKeyConfig,
+	) -> CommandText {
+		CommandText::new(
+			format!(
+				"Del cmd [{}]",
+				key_config.get_hint(key_config.keys.delete_generic),
+			),
+			"Delete selected command",
+			CMD_GROUP_GENERAL,
+		)
+	}
 	pub fn select_staging(
 		key_config: &SharedKeyConfig,
 	) -> CommandText {
