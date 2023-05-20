@@ -9,6 +9,7 @@ use super::{
 use crate::{
 	//components::utils::string_width_align,
 	keys::{key_match, SharedKeyConfig},
+	options::SharedOptions,
 	queue::Queue,
 	strings::{self},
 	ui::{self, style::SharedTheme},
@@ -37,8 +38,8 @@ pub struct ExternalCommandPopupComponent {
 	key_config: SharedKeyConfig,
 	theme: SharedTheme,
 	queue: Queue,
+	options: SharedOptions,
 
-	prev_commands: Vec<String>,
 	selected_idx: usize,
 	visible_idx: RefCell<usize>,
 	focused: Focused,
@@ -50,6 +51,7 @@ impl ExternalCommandPopupComponent {
 		theme: SharedTheme,
 		key_config: SharedKeyConfig,
 		queue: Queue,
+		options: SharedOptions,
 	) -> Self {
 		Self {
 			visible: false,
@@ -65,17 +67,7 @@ impl ExternalCommandPopupComponent {
 			key_config,
 			theme,
 			queue,
-			prev_commands: vec![
-				"Old cmd1".to_string(),
-				"Old cmd2".to_string(),
-				"Old cmd3".to_string(),
-				"Old cmd4".to_string(),
-				"Old cmd5".to_string(),
-				"Old cmd6".to_string(),
-				"Old cmd7".to_string(),
-				"Old cmd8".to_string(),
-				"Old cmd9".to_string(),
-			], //Vec::new(),
+			options,
 			selected_idx: 0,
 			visible_idx: 0.into(),
 			focused: Focused::Input,
@@ -89,25 +81,25 @@ impl ExternalCommandPopupComponent {
 		defer! {
 			io::stdout().execute(EnterAlternateScreen).expect("reset terminal");
 		}*/
-		self.do_exec_command()
+		let cmd = self.cmdline.get_text();
+		self.options.borrow_mut().add_extern_command(cmd);
+		self.do_exec_command(cmd)
 	}
 
 	#[cfg(unix)]
 	fn do_exec_command(
 		&self,
+		cmd: &str,
 	) -> Result<std::process::Output, std::io::Error> {
-		Command::new("sh")
-			.args(["-c", self.cmdline.get_text()])
-			.output()
+		Command::new("sh").args(["-c", cmd]).output()
 	}
 
 	#[cfg(windows)]
 	fn do_exec_command(
 		&self,
+		cmd: &str,
 	) -> Result<std::process::Output, std::io::Error> {
-		Command::new("cmd.exe")
-			.args(["/C", self.cmdline.get_text()])
-			.output()
+		Command::new("cmd.exe").args(["/C", cmd]).output()
 	}
 }
 
@@ -159,8 +151,9 @@ impl DrawableComponent for ExternalCommandPopupComponent {
 			}
 
 			let w = v_blocks[1].width;
-			let prev_command_spans = self
-				.prev_commands
+			let opts = self.options.borrow();
+			let prev_command_spans = opts
+				.extern_commands()
 				.iter()
 				.enumerate()
 				.skip(*vis_idx)
@@ -247,7 +240,8 @@ impl Component for ExternalCommandPopupComponent {
 				} else if key_match(key, self.key_config.keys.enter) {
 					if self.focused == Focused::List {
 						self.cmdline.set_text(
-							self.prev_commands[self.selected_idx]
+							self.options.borrow().extern_commands()
+								[self.selected_idx]
 								.clone(),
 						);
 					}
@@ -286,12 +280,20 @@ impl Component for ExternalCommandPopupComponent {
 					self.hide();
 					true
 				} else if self.focused == Focused::List
-					&& !self.prev_commands.is_empty()
+					&& !self
+						.options
+						.borrow()
+						.extern_commands()
+						.is_empty()
 				{
 					if key_match(key, self.key_config.keys.move_down)
 					{
 						if self.selected_idx
-							< self.prev_commands.len() - 1
+							< self
+								.options
+								.borrow()
+								.extern_commands()
+								.len() - 1
 						{
 							self.selected_idx += 1;
 						}

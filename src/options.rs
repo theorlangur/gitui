@@ -22,6 +22,7 @@ struct OptionsData {
 	pub diff: DiffOptions,
 	pub status_show_untracked: Option<ShowUntrackedFilesConfig>,
 	pub commit_msgs: Vec<String>,
+	pub extern_cmds: Vec<String>,
 }
 
 const COMMIT_MSG_HISTRY_LENGTH: usize = 20;
@@ -93,6 +94,27 @@ impl Options {
 		self.data.diff.ignore_whitespace =
 			!self.data.diff.ignore_whitespace;
 
+		self.save();
+	}
+
+	pub fn extern_commands(&self) -> &Vec<String> {
+		&self.data.extern_cmds
+	}
+
+	pub fn add_extern_command(&mut self, cmd: &str) {
+		let existing = self
+			.data
+			.extern_cmds
+			.iter()
+			.enumerate()
+			.find(|i| i.1 == cmd);
+		if let Some((idx, _)) = existing {
+			let s = self.data.extern_cmds.remove(idx);
+			self.data.extern_cmds.insert(0, s);
+		} else {
+			//add new
+			self.data.extern_cmds.insert(0, cmd.to_string());
+		}
 		self.save();
 	}
 

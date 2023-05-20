@@ -283,6 +283,7 @@ impl App {
 					theme.clone(),
 					key_config.clone(),
 					queue.clone(),
+					options.clone(),
 				),
 			submodule_popup: SubmodulesListComponent::new(
 				repo.clone(),
