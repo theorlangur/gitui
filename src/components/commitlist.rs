@@ -465,6 +465,41 @@ impl CommitList {
 		}
 	}
 
+	pub fn search_commit_forward(&mut self, pat: &str) {
+		let res = self
+			.items
+			.iter()
+			.enumerate()
+			.skip(self.selection + 1)
+			.filter(|item| {
+				item.1.msg.contains(pat)
+					|| item.1.author.contains(pat)
+			})
+			.map(|item| item.0)
+			.nth(0);
+		if let Some(idx) = res {
+			self.select_entry(idx);
+		}
+	}
+
+	pub fn search_commit_backward(&mut self, pat: &str) {
+		let res = self
+			.items
+			.iter()
+			.take(self.selection)
+			.enumerate()
+			.rev()
+			.filter(|item| {
+				item.1.msg.contains(pat)
+					|| item.1.author.contains(pat)
+			})
+			.map(|item| item.0)
+			.nth(0);
+		if let Some(idx) = res {
+			self.select_entry(idx);
+		}
+	}
+
 	pub fn set_local_branches(
 		&mut self,
 		local_branches: Vec<BranchInfo>,
