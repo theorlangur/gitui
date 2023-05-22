@@ -1,4 +1,5 @@
 use super::utils::logitems::{ItemBatch, LogEntry};
+use super::TextInputComponent;
 use crate::{
 	components::{
 		utils::string_width_align, CommandBlocking, CommandInfo,
@@ -19,6 +20,7 @@ use asyncgit::sync::{
 use chrono::{DateTime, Local};
 use crossterm::event::Event;
 use itertools::Itertools;
+use ratatui::layout::{Constraint, Layout, Margin};
 use ratatui::{
 	backend::Backend,
 	layout::{Alignment, Rect},
@@ -32,6 +34,12 @@ use std::{
 };
 
 const ELEMENTS_PER_LINE: usize = 9;
+
+#[derive(PartialEq)]
+enum Focused {
+	Input,
+	List,
+}
 
 ///
 pub struct CommitList {
@@ -50,6 +58,9 @@ pub struct CommitList {
 	theme: SharedTheme,
 	queue: Queue,
 	key_config: SharedKeyConfig,
+	search_field: TextInputComponent,
+	focused_field: Focused,
+	current_search: String,
 }
 
 impl CommitList {
@@ -73,11 +84,46 @@ impl CommitList {
 			remote_branches: BTreeMap::default(),
 			current_size: Cell::new(None),
 			scroll_top: Cell::new(0),
-			theme,
+			theme: theme.clone(),
 			queue,
-			key_config,
+			key_config: key_config.clone(),
 			title: title.into(),
+			search_field: TextInputComponent::new(
+				theme,
+				key_config,
+				"Search in commits...",
+				"Enter text to search here",
+				false,
+			)
+			.with_input_type(super::InputType::Singleline)
+			.make_embed(),
+			focused_field: Focused::List,
+			current_search: String::new(),
 		}
+	}
+
+	///
+	pub fn show_search(&mut self) {
+		self.search_field.show();
+		self.search_field.clear();
+		self.focused_field = Focused::Input;
+	}
+
+	pub fn stop_search(&mut self) {
+		self.current_search.clear();
+		self.search_field.hide();
+		self.focused_field = Focused::List;
+	}
+
+	pub fn toggle_input_focus(&mut self) {
+		self.focused_field = if self.search_field.is_visible() {
+			match self.focused_field {
+				Focused::Input => Focused::List,
+				Focused::List => Focused::Input,
+			}
+		} else {
+			Focused::List
+		};
 	}
 
 	///
@@ -465,15 +511,18 @@ impl CommitList {
 		}
 	}
 
-	pub fn search_commit_forward(&mut self, pat: &str) {
+	pub fn search_commit_forward(&mut self) {
+		if self.current_search.is_empty() {
+			return ();
+		}
 		let res = self
 			.items
 			.iter()
 			.enumerate()
 			.skip(self.selection + 1)
 			.filter(|item| {
-				item.1.msg.contains(pat)
-					|| item.1.author.contains(pat)
+				item.1.msg.contains(&self.current_search)
+					|| item.1.author.contains(&self.current_search)
 			})
 			.map(|item| item.0)
 			.nth(0);
@@ -482,7 +531,10 @@ impl CommitList {
 		}
 	}
 
-	pub fn search_commit_backward(&mut self, pat: &str) {
+	pub fn search_commit_backward(&mut self) {
+		if self.current_search.is_empty() {
+			return ();
+		}
 		let res = self
 			.items
 			.iter()
@@ -490,8 +542,8 @@ impl CommitList {
 			.enumerate()
 			.rev()
 			.filter(|item| {
-				item.1.msg.contains(pat)
-					|| item.1.author.contains(pat)
+				item.1.msg.contains(&self.current_search)
+					|| item.1.author.contains(&self.current_search)
 			})
 			.map(|item| item.0)
 			.nth(0);
@@ -527,6 +579,79 @@ impl CommitList {
 				.push(remote_branch);
 		}
 	}
+
+	fn list_event(&mut self, ev: &Event) -> Result<EventState> {
+		if let Event::Key(k) = ev {
+			let selection_changed =
+				if key_match(k, self.key_config.keys.move_up) {
+					self.move_selection(ScrollType::Up)?
+				} else if key_match(k, self.key_config.keys.move_down)
+				{
+					self.move_selection(ScrollType::Down)?
+				} else if key_match(k, self.key_config.keys.shift_up)
+					|| key_match(k, self.key_config.keys.home)
+				{
+					self.move_selection(ScrollType::Home)?
+				} else if key_match(
+					k,
+					self.key_config.keys.shift_down,
+				) || key_match(k, self.key_config.keys.end)
+				{
+					self.move_selection(ScrollType::End)?
+				} else if key_match(k, self.key_config.keys.page_up) {
+					self.move_selection(ScrollType::PageUp)?
+				} else if key_match(k, self.key_config.keys.page_down)
+				{
+					self.move_selection(ScrollType::PageDown)?
+				} else if key_match(
+					k,
+					self.key_config.keys.log_mark_commit,
+				) {
+					self.mark();
+					true
+				} else if key_match(
+					k,
+					self.key_config.keys.log_checkout_commit,
+				) {
+					self.checkout();
+					true
+				} else if key_match(
+					k,
+					self.key_config.keys.start_search_forward,
+				) {
+					self.show_search();
+					true
+				} else if key_match(
+					k,
+					self.key_config.keys.exit_popup,
+				) {
+					self.stop_search();
+					true
+				} else if key_match(
+					k,
+					self.key_config.keys.tab_toggle,
+				) {
+					self.toggle_input_focus();
+					true
+				} else if key_match(
+					k,
+					self.key_config.keys.search_next,
+				) {
+					self.search_commit_forward();
+					true
+				} else if key_match(
+					k,
+					self.key_config.keys.search_prev,
+				) {
+					self.search_commit_backward();
+					true
+				} else {
+					false
+				};
+			return Ok(selection_changed.into());
+		}
+		Ok(EventState::NotConsumed)
+	}
 }
 
 impl DrawableComponent for CommitList {
@@ -535,6 +660,23 @@ impl DrawableComponent for CommitList {
 		f: &mut Frame<B>,
 		area: Rect,
 	) -> Result<()> {
+		let area = if self.search_field.is_visible() {
+			let v_blocks = Layout::default()
+				.direction(ratatui::layout::Direction::Vertical)
+				.constraints(
+					[
+						Constraint::Length(2),
+						Constraint::Percentage(100),
+					]
+					.as_ref(),
+				)
+				.split(area);
+			self.search_field.draw(f, v_blocks[0])?;
+			v_blocks[1]
+		} else {
+			area
+		};
+
 		let current_size = (
 			area.width.saturating_sub(2),
 			area.height.saturating_sub(2),
@@ -592,47 +734,31 @@ impl DrawableComponent for CommitList {
 
 impl Component for CommitList {
 	fn event(&mut self, ev: &Event) -> Result<EventState> {
-		if let Event::Key(k) = ev {
-			let selection_changed =
-				if key_match(k, self.key_config.keys.move_up) {
-					self.move_selection(ScrollType::Up)?
-				} else if key_match(k, self.key_config.keys.move_down)
-				{
-					self.move_selection(ScrollType::Down)?
-				} else if key_match(k, self.key_config.keys.shift_up)
-					|| key_match(k, self.key_config.keys.home)
-				{
-					self.move_selection(ScrollType::Home)?
-				} else if key_match(
-					k,
-					self.key_config.keys.shift_down,
-				) || key_match(k, self.key_config.keys.end)
-				{
-					self.move_selection(ScrollType::End)?
-				} else if key_match(k, self.key_config.keys.page_up) {
-					self.move_selection(ScrollType::PageUp)?
-				} else if key_match(k, self.key_config.keys.page_down)
-				{
-					self.move_selection(ScrollType::PageDown)?
-				} else if key_match(
-					k,
-					self.key_config.keys.log_mark_commit,
-				) {
-					self.mark();
-					true
-				} else if key_match(
-					k,
-					self.key_config.keys.log_checkout_commit,
-				) {
-					self.checkout();
-					true
+		match self.focused_field {
+			Focused::List => self.list_event(ev),
+			Focused::Input => {
+				if let Event::Key(k) = ev {
+					if key_match(k, self.key_config.keys.enter) {
+						self.toggle_input_focus();
+						self.current_search =
+							self.search_field.get_text().to_string();
+						//start actual search
+						self.search_commit_forward();
+						Ok(EventState::Consumed)
+					} else if key_match(
+						k,
+						self.key_config.keys.exit_popup,
+					) {
+						self.stop_search();
+						Ok(EventState::Consumed)
+					} else {
+						self.search_field.event(ev)
+					}
 				} else {
-					false
-				};
-			return Ok(selection_changed.into());
+					self.search_field.event(ev)
+				}
+			}
 		}
-
-		Ok(EventState::NotConsumed)
 	}
 
 	fn commands(
