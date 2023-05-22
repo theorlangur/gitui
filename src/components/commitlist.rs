@@ -20,7 +20,7 @@ use asyncgit::sync::{
 use chrono::{DateTime, Local};
 use crossterm::event::Event;
 use itertools::Itertools;
-use ratatui::layout::{Constraint, Layout, Margin};
+use ratatui::layout::{Constraint, Layout};
 use ratatui::{
 	backend::Backend,
 	layout::{Alignment, Rect},
@@ -104,9 +104,10 @@ impl CommitList {
 
 	///
 	pub fn show_search(&mut self) {
-		self.search_field.show();
-		self.search_field.clear();
-		self.focused_field = Focused::Input;
+		if let Ok(_) = self.search_field.show() {
+			self.search_field.clear();
+			self.focused_field = Focused::Input;
+		}
 	}
 
 	pub fn stop_search(&mut self) {
@@ -629,7 +630,7 @@ impl CommitList {
 					true
 				} else if key_match(
 					k,
-					self.key_config.keys.tab_toggle,
+					self.key_config.keys.toggle_workarea,
 				) {
 					self.toggle_input_focus();
 					true
