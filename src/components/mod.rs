@@ -28,6 +28,7 @@ mod reset;
 mod reset_popup;
 mod revision_files;
 mod revision_files_popup;
+mod search_options;
 mod stashmsg;
 mod status_tree;
 mod submodules;

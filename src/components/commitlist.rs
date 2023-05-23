@@ -1,3 +1,4 @@
+use super::search_options::SearchOptionsPopupComponent;
 use super::utils::logitems::{ItemBatch, LogEntry};
 use super::TextInputComponent;
 use crate::{
@@ -59,6 +60,7 @@ pub struct CommitList {
 	queue: Queue,
 	key_config: SharedKeyConfig,
 	search_field: TextInputComponent,
+	search_options: SearchOptionsPopupComponent,
 	focused_field: Focused,
 	current_search: String,
 }
@@ -89,14 +91,18 @@ impl CommitList {
 			key_config: key_config.clone(),
 			title: title.into(),
 			search_field: TextInputComponent::new(
-				theme,
-				key_config,
+				theme.clone(),
+				key_config.clone(),
 				"Search in commits...",
 				"Enter text to search here",
 				false,
 			)
 			.with_input_type(super::InputType::Singleline)
 			.make_embed(),
+			search_options: SearchOptionsPopupComponent::new(
+				theme.clone(),
+				key_config.clone(),
+			),
 			focused_field: Focused::List,
 			current_search: String::new(),
 		}
@@ -522,8 +528,13 @@ impl CommitList {
 			.enumerate()
 			.skip(self.selection + 1)
 			.filter(|item| {
-				item.1.msg.contains(&self.current_search)
-					|| item.1.author.contains(&self.current_search)
+				(self.search_options.message
+					&& item.1.msg.contains(&self.current_search))
+					|| (self.search_options.author
+						&& item
+							.1
+							.author
+							.contains(&self.current_search))
 			})
 			.map(|item| item.0)
 			.nth(0);
@@ -543,8 +554,13 @@ impl CommitList {
 			.enumerate()
 			.rev()
 			.filter(|item| {
-				item.1.msg.contains(&self.current_search)
-					|| item.1.author.contains(&self.current_search)
+				(self.search_options.message
+					&& item.1.msg.contains(&self.current_search))
+					|| (self.search_options.author
+						&& item
+							.1
+							.author
+							.contains(&self.current_search))
 			})
 			.map(|item| item.0)
 			.nth(0);
@@ -661,6 +677,7 @@ impl DrawableComponent for CommitList {
 		f: &mut Frame<B>,
 		area: Rect,
 	) -> Result<()> {
+		let original_area = area.clone();
 		let search_focused = self.focused_field == Focused::Input;
 		let area = if self.search_field.is_visible() {
 			let v_blocks = Layout::default()
@@ -749,12 +766,20 @@ impl DrawableComponent for CommitList {
 			Orientation::Vertical,
 		);
 
+		if self.search_options.is_visible() {
+			self.search_options.draw(f, original_area)?;
+		}
+
 		Ok(())
 	}
 }
 
 impl Component for CommitList {
 	fn event(&mut self, ev: &Event) -> Result<EventState> {
+		if self.search_options.is_visible() {
+			self.search_options.event(ev)?;
+			return Ok(EventState::Consumed);
+		}
 		match self.focused_field {
 			Focused::List => self.list_event(ev),
 			Focused::Input => {
@@ -778,6 +803,12 @@ impl Component for CommitList {
 					) {
 						self.toggle_input_focus();
 						Ok(EventState::Consumed)
+					} else if key_match(
+						k,
+						self.key_config.keys.open_suboptions,
+					) {
+						self.search_options.show()?;
+						Ok(EventState::Consumed)
 					} else {
 						self.search_field.event(ev)
 					}
@@ -793,6 +824,9 @@ impl Component for CommitList {
 		out: &mut Vec<CommandInfo>,
 		_force_all: bool,
 	) -> CommandBlocking {
+		if self.search_options.is_visible() {
+			return self.search_options.commands(out, _force_all);
+		}
 		out.push(CommandInfo::new(
 			strings::commands::scroll(&self.key_config),
 			self.selected_entry().is_some(),
