@@ -661,6 +661,7 @@ impl DrawableComponent for CommitList {
 		f: &mut Frame<B>,
 		area: Rect,
 	) -> Result<()> {
+		let search_focused = self.focused_field == Focused::Input;
 		let area = if self.search_field.is_visible() {
 			let v_blocks = Layout::default()
 				.direction(ratatui::layout::Direction::Vertical)
@@ -672,7 +673,26 @@ impl DrawableComponent for CommitList {
 					.as_ref(),
 				)
 				.split(area);
-			self.search_field.draw(f, v_blocks[0])?;
+
+			f.render_widget(
+				Block::default()
+					.borders(
+						Borders::TOP | Borders::RIGHT | Borders::LEFT,
+					)
+					.title(Span::styled(
+						"Search for...",
+						self.theme.title(search_focused),
+					))
+					.border_style(self.theme.block(search_focused)),
+				v_blocks[0],
+			);
+			let edit_area = Rect::new(
+				v_blocks[0].x + 1,
+				v_blocks[0].y + 1,
+				v_blocks[0].width - 2,
+				v_blocks[0].height - 1,
+			);
+			self.search_field.draw(f, edit_area)?;
 			v_blocks[1]
 		} else {
 			area
@@ -712,9 +732,9 @@ impl DrawableComponent for CommitList {
 					.borders(Borders::ALL)
 					.title(Span::styled(
 						title.as_str(),
-						self.theme.title(true),
+						self.theme.title(!search_focused),
 					))
-					.border_style(self.theme.block(true)),
+					.border_style(self.theme.block(!search_focused)),
 			)
 			.alignment(Alignment::Left),
 			area,
@@ -751,6 +771,12 @@ impl Component for CommitList {
 						self.key_config.keys.exit_popup,
 					) {
 						self.stop_search();
+						Ok(EventState::Consumed)
+					} else if key_match(
+						k,
+						self.key_config.keys.toggle_workarea,
+					) {
+						self.toggle_input_focus();
 						Ok(EventState::Consumed)
 					} else {
 						self.search_field.event(ev)
