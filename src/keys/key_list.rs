@@ -224,7 +224,7 @@ impl Default for KeysList {
 			start_search_backward: GituiKeyEvent::new(KeyCode::Char('?'),  KeyModifiers::empty()),
 			search_next: GituiKeyEvent::new(KeyCode::Char('n'),  KeyModifiers::empty()),
 			search_prev: GituiKeyEvent::new(KeyCode::Char('N'),  KeyModifiers::SHIFT),
-			open_suboptions: GituiKeyEvent::new(KeyCode::Char('o'),  KeyModifiers::ALT),
+			open_suboptions: GituiKeyEvent::new(KeyCode::Char('o'),  KeyModifiers::CONTROL),
 		}
 	}
 }
