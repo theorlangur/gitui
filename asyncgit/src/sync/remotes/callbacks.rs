@@ -182,13 +182,8 @@ impl Callbacks {
 		url: &str,
 		username_from_url: Option<&str>,
 	) -> std::result::Result<Cred, GitError> {
-		let config_path = if cfg!(target_os = "macos") {
-			dirs_next::home_dir()
-				.map(|h| h.join(".ssh").join("config"))
-		} else {
-			dirs_next::home_dir()
-				.map(|h| h.join(".ssh").join("config"))
-		};
+		let config_path = dirs_next::home_dir()
+			.map(|h| h.join(".ssh").join("config"));
 
 		if config_path.is_none() {
 			return Cred::default();
