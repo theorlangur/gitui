@@ -3,9 +3,12 @@ use crate::{error::Result, sync::cred::BasicAuthCredential};
 use crossbeam_channel::Sender;
 use git2::{Cred, Error as GitError, RemoteCallbacks};
 use std::sync::{
-	atomic::{AtomicBool, Ordering},
+	atomic::{AtomicUsize, Ordering},
 	Arc, Mutex,
 };
+
+use ssh2_config::{ParseRule, SshConfig};
+use std::{fs::File, io::BufReader};
 
 ///
 #[derive(Default, Clone)]
@@ -19,7 +22,7 @@ pub struct Callbacks {
 	sender: Option<Sender<ProgressNotification>>,
 	basic_credential: Option<BasicAuthCredential>,
 	stats: Arc<Mutex<CallbackStats>>,
-	first_call_to_credentials: Arc<AtomicBool>,
+	count_calls_to_credentials: Arc<AtomicUsize>,
 }
 
 impl Callbacks {
@@ -34,9 +37,7 @@ impl Callbacks {
 			sender,
 			basic_credential,
 			stats,
-			first_call_to_credentials: Arc::new(AtomicBool::new(
-				true,
-			)),
+			count_calls_to_credentials: Arc::new(AtomicUsize::new(0)),
 		}
 	}
 
@@ -176,6 +177,69 @@ impl Callbacks {
 		});
 	}
 
+	fn try_read_openssh_config(
+		&self,
+		url: &str,
+		username_from_url: Option<&str>,
+	) -> std::result::Result<Cred, GitError> {
+		let config_path = if cfg!(target_os = "macos") {
+			dirs_next::home_dir()
+				.map(|h| h.join(".ssh").join("config"))
+		} else {
+			dirs_next::home_dir()
+				.map(|h| h.join(".ssh").join("config"))
+		};
+
+		if config_path.is_none() {
+			return Cred::default();
+		}
+
+		let config_path = config_path.unwrap();
+
+		let mut reader = BufReader::new(
+			File::open(config_path)
+				.expect("Could not open configuration file"), //we should manually unwrap
+		);
+
+		let config = SshConfig::default()
+			.parse(&mut reader, ParseRule::STRICT)
+			.expect("Failed to parse configuration");
+		let disected_url = git_url_parse::GitUrl::parse(url);
+		if disected_url.is_err() {
+			return Err(GitError::from_str(&format!(
+				"Wrong url: {:?}",
+				disected_url.err().unwrap()
+			)));
+		}
+
+		let disected_url = disected_url.unwrap();
+		let host_str = disected_url.host;
+		if host_str.is_none() {
+			return Err(GitError::from_str(&format!(
+				"No host found in url: {:?}",
+				url
+			)));
+		}
+
+		//let default_params = config.default_params();
+		// Query parameters for your host
+		// If there's no rule for your host, default params are returned
+		let params = config.query(host_str.unwrap());
+
+		if username_from_url.is_some()
+			&& params.identity_file.is_some()
+		{
+			Cred::ssh_key(
+				username_from_url.unwrap(),
+				None,
+				params.identity_file.unwrap()[0].as_path(),
+				None,
+			)
+		} else {
+			Err(GitError::from_str("Couldn't find credentials"))
+		}
+	}
+
 	// If credentials are bad, we don't ask the user to re-fill their creds. We push an error and they will be able to restart their action (for example a push) and retype their creds.
 	// This behavior is explained in a issue on git2-rs project : https://github.com/rust-lang/git2-rs/issues/347
 	// An implementation reference is done in cargo : https://github.com/rust-lang/cargo/blob/9fb208dddb12a3081230a5fd8f470e01df8faa25/src/cargo/sources/git/utils.rs#L588
@@ -194,23 +258,33 @@ impl Callbacks {
 		);
 
 		// This boolean is used to avoid multiple calls to credentials callback.
-		if self.first_call_to_credentials.load(Ordering::Relaxed) {
-			self.first_call_to_credentials
-				.store(false, Ordering::Relaxed);
-		} else {
+		let prev_call_count = self
+			.count_calls_to_credentials
+			.fetch_add(1, Ordering::Relaxed);
+		if prev_call_count >= 2 {
 			return Err(GitError::from_str("Bad credentials."));
 		}
 
 		match &self.basic_credential {
-			_ if allowed_types.is_ssh_key() => username_from_url
-				.map_or_else(
+			_ if prev_call_count == 0
+				&& allowed_types.is_ssh_key() =>
+			{
+				username_from_url.map_or_else(
 					|| {
 						Err(GitError::from_str(
 							" Couldn't extract username from url.",
 						))
 					},
 					Cred::ssh_key_from_agent,
-				),
+				)
+			}
+			_ if prev_call_count == 1
+				&& allowed_types.is_ssh_key() =>
+			{
+				//first attempt didn't pan out
+				//maybe OpenSSH config will help us?
+				self.try_read_openssh_config(url, username_from_url)
+			}
 			Some(BasicAuthCredential {
 				username: Some(user),
 				password: Some(pwd),
