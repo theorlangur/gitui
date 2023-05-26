@@ -29,6 +29,7 @@ pub struct FilterOptionsPopupComponent {
 	pub author: bool,
 	pub message: bool,
 	selected_idx: usize,
+	pub title: String,
 }
 
 impl FilterOptionsPopupComponent {
@@ -37,14 +38,17 @@ impl FilterOptionsPopupComponent {
 		theme: SharedTheme,
 		key_config: SharedKeyConfig,
 	) -> Self {
-		Self {
+		let mut ret = Self {
 			visible: false,
 			key_config,
 			theme,
 			author: true,
 			message: true,
 			selected_idx: 0,
-		}
+			title: String::new(),
+		};
+		ret.update_title();
+		ret
 	}
 	fn add_checkbox(
 		&self,
@@ -78,6 +82,20 @@ impl FilterOptionsPopupComponent {
 		);
 
 		txt
+	}
+
+	pub fn update_title(&mut self) {
+		self.title = "Filter with...".to_string();
+		if self.author || self.message {
+			self.title += " (";
+			if self.author {
+				self.title += "Author "
+			}
+			if self.message {
+				self.title += "Message "
+			}
+			self.title += ")";
+		}
 	}
 }
 
@@ -181,6 +199,7 @@ impl Component for FilterOptionsPopupComponent {
 
 	fn hide(&mut self) {
 		self.visible = false;
+		self.update_title();
 	}
 
 	fn show(&mut self) -> Result<()> {

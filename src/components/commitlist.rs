@@ -902,7 +902,7 @@ impl DrawableComponent for CommitList {
 		self.draw_input_field(
 			f,
 			&self.filter_field,
-			"Filter with...",
+			&self.filter_options.title,
 			filter_area,
 			self.focused_field == Focused::InputFilter,
 		)?;
@@ -910,7 +910,7 @@ impl DrawableComponent for CommitList {
 		self.draw_input_field(
 			f,
 			&self.search_field,
-			"Search for...",
+			&self.search_options.title,
 			search_area,
 			self.focused_field == Focused::InputSearch,
 		)?;
