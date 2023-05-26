@@ -94,6 +94,10 @@ impl Revlog {
 	///
 	pub fn update(&mut self) -> Result<()> {
 		if self.is_visible() {
+			let filter_updated = self.list.filter_was_updated();
+			if filter_updated {
+				self.git_log.update_filter(self.list.get_filter());
+			}
 			let log_changed =
 				self.git_log.fetch()? == FetchStatus::Started;
 
@@ -102,7 +106,7 @@ impl Revlog {
 			let selection = self.list.selection();
 			let selection_max = self.list.selection_max();
 			if self.list.items().needs_data(selection, selection_max)
-				|| log_changed
+				|| log_changed || filter_updated
 			{
 				self.fetch_commits()?;
 			}
@@ -184,7 +188,6 @@ impl Revlog {
 		);
 
 		if let Ok(commits) = commits {
-			let commits = self.list.filter_commits(commits);
 			self.list.items().set_items(want_min, commits);
 		}
 

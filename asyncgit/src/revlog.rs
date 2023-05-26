@@ -34,6 +34,7 @@ pub struct AsyncLog {
 	background: Arc<AtomicBool>,
 	filter: Option<LogWalkerFilter>,
 	repo: RepoPath,
+	filter_updated: bool,
 }
 
 static LIMIT_COUNT: usize = 3000;
@@ -55,6 +56,7 @@ impl AsyncLog {
 			pending: Arc::new(AtomicBool::new(false)),
 			background: Arc::new(AtomicBool::new(false)),
 			filter,
+			filter_updated: false,
 		}
 	}
 
@@ -111,6 +113,12 @@ impl AsyncLog {
 	}
 
 	///
+	pub fn update_filter(&mut self, filter: Option<LogWalkerFilter>) {
+		self.filter = filter;
+		self.filter_updated = true;
+	}
+
+	///
 	pub fn fetch(&mut self) -> Result<FetchStatus> {
 		self.background.store(false, Ordering::Relaxed);
 
@@ -118,10 +126,11 @@ impl AsyncLog {
 			return Ok(FetchStatus::Pending);
 		}
 
-		if !self.head_changed()? {
+		if !self.head_changed()? && !self.filter_updated {
 			return Ok(FetchStatus::NoChange);
 		}
 
+		self.filter_updated = false;
 		self.clear()?;
 
 		let arc_current = Arc::clone(&self.current);

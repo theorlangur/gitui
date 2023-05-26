@@ -16,8 +16,8 @@ use crate::{
 };
 use anyhow::Result;
 use asyncgit::sync::{
-	checkout_commit, BranchDetails, BranchInfo, CommitId, CommitInfo,
-	RepoPathRef, Tags,
+	checkout_commit, BranchDetails, BranchInfo, CommitId,
+	LogWalkerFilter, RepoPathRef, Tags,
 };
 use chrono::{DateTime, Local};
 use crossterm::event::Event;
@@ -67,6 +67,7 @@ pub struct CommitList {
 	filter_options: FilterOptionsPopupComponent,
 	focused_field: Focused,
 	current_search: String,
+	filter_updated: bool,
 }
 
 impl CommitList {
@@ -122,6 +123,7 @@ impl CommitList {
 			),
 			focused_field: Focused::List,
 			current_search: String::new(),
+			filter_updated: true,
 		}
 	}
 
@@ -148,8 +150,11 @@ impl CommitList {
 
 	pub fn stop_filter(&mut self) {
 		self.filter_field.clear();
-		self.filter_field.hide();
 		self.focused_field = Focused::List;
+		if self.filter_field.is_visible() {
+			self.filter_field.hide();
+			self.filter_updated = true;
+		}
 	}
 
 	pub fn toggle_input_focus(&mut self) {
@@ -175,22 +180,41 @@ impl CommitList {
 		&mut self.items
 	}
 
-	pub fn filter_commits(
-		&self,
-		list: Vec<CommitInfo>,
-	) -> Vec<CommitInfo> {
-		let filter_by = self.filter_field.get_text();
-		if filter_by.is_empty() {
-			list
+	pub fn get_filter(&self) -> Option<LogWalkerFilter> {
+		if self.filter_field.is_visible()
+			&& !self.filter_field.get_text().is_empty()
+		{
+			let filter_txt = self.filter_field.get_text().to_string();
+			let filter_author = self.filter_options.author;
+			let filter_msg = self.filter_options.message;
+			Some(std::sync::Arc::new(Box::new(
+				move |repo,
+				      commit_id: &CommitId|
+				      -> Result<bool, asyncgit::Error> {
+					let commit =
+						repo.find_commit((*commit_id).into())?;
+					if filter_author
+						&& commit
+							.author()
+							.name()
+							.unwrap()
+							.contains(&filter_txt)
+					{
+						Ok(true)
+					} else if filter_msg
+						&& commit
+							.message()
+							.unwrap()
+							.contains(&filter_txt)
+					{
+						Ok(true)
+					} else {
+						Ok(false)
+					}
+				},
+			)))
 		} else {
-			list.into_iter()
-				.filter(|i| {
-					(self.filter_options.author
-						&& i.author.contains(filter_by))
-						|| (self.filter_options.message
-							&& i.message.contains(filter_by))
-				})
-				.collect()
+			None
 		}
 	}
 
@@ -663,6 +687,12 @@ impl CommitList {
 		}
 	}
 
+	pub fn filter_was_updated(&mut self) -> bool {
+		let v = self.filter_updated;
+		self.filter_updated = false;
+		v
+	}
+
 	fn list_event(&mut self, ev: &Event) -> Result<EventState> {
 		if let Event::Key(k) = ev {
 			let selection_changed =
@@ -785,7 +815,7 @@ impl CommitList {
 		if let Event::Key(k) = ev {
 			if key_match(k, self.key_config.keys.enter) {
 				self.focused_field = Focused::List;
-				//refresh commit list
+				self.filter_updated = true;
 				Ok(EventState::Consumed)
 			} else if key_match(k, self.key_config.keys.exit_popup) {
 				self.stop_filter();
