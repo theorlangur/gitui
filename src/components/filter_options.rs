@@ -20,19 +20,18 @@ use ratatui::{
 //use scopeguard::defer;
 //use std::io;
 
-const FIELD_COUNT: usize = 3;
+const FIELD_COUNT: usize = 2;
 
-pub struct SearchOptionsPopupComponent {
+pub struct FilterOptionsPopupComponent {
 	visible: bool,
 	key_config: SharedKeyConfig,
 	theme: SharedTheme,
 	pub author: bool,
 	pub message: bool,
-	pub sha: bool,
 	selected_idx: usize,
 }
 
-impl SearchOptionsPopupComponent {
+impl FilterOptionsPopupComponent {
 	///
 	pub fn new(
 		theme: SharedTheme,
@@ -44,7 +43,6 @@ impl SearchOptionsPopupComponent {
 			theme,
 			author: true,
 			message: true,
-			sha: true,
 			selected_idx: 0,
 		}
 	}
@@ -78,18 +76,12 @@ impl SearchOptionsPopupComponent {
 			self.message,
 			self.selected_idx == 1,
 		);
-		self.add_checkbox(
-			&mut txt,
-			"SHA".to_string(),
-			self.sha,
-			self.selected_idx == 2,
-		);
 
 		txt
 	}
 }
 
-impl DrawableComponent for SearchOptionsPopupComponent {
+impl DrawableComponent for FilterOptionsPopupComponent {
 	fn draw<B: Backend>(
 		&self,
 		f: &mut Frame<B>,
@@ -121,7 +113,7 @@ impl DrawableComponent for SearchOptionsPopupComponent {
 	}
 }
 
-impl Component for SearchOptionsPopupComponent {
+impl Component for FilterOptionsPopupComponent {
 	fn commands(
 		&self,
 		out: &mut Vec<CommandInfo>,
@@ -155,8 +147,6 @@ impl Component for SearchOptionsPopupComponent {
 						self.author = !self.author;
 					} else if self.selected_idx == 1 {
 						self.message = !self.message;
-					} else if self.selected_idx == 2 {
-						self.sha = !self.sha;
 					}
 					true
 				} else if key_match(

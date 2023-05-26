@@ -128,6 +128,7 @@ pub struct KeysList {
 	pub search_next: GituiKeyEvent,
 	pub search_prev: GituiKeyEvent,
 	pub open_suboptions: GituiKeyEvent,
+	pub filter_commits: GituiKeyEvent,
 }
 
 #[rustfmt::skip]
@@ -225,6 +226,7 @@ impl Default for KeysList {
 			search_next: GituiKeyEvent::new(KeyCode::Char('n'),  KeyModifiers::empty()),
 			search_prev: GituiKeyEvent::new(KeyCode::Char('N'),  KeyModifiers::SHIFT),
 			open_suboptions: GituiKeyEvent::new(KeyCode::Char('o'),  KeyModifiers::CONTROL),
+			filter_commits: GituiKeyEvent::new(KeyCode::Char('='),  KeyModifiers::empty()),
 		}
 	}
 }

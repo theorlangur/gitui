@@ -1,3 +1,4 @@
+use super::filter_options::FilterOptionsPopupComponent;
 use super::search_options::SearchOptionsPopupComponent;
 use super::utils::logitems::{ItemBatch, LogEntry};
 use super::TextInputComponent;
@@ -15,7 +16,7 @@ use crate::{
 };
 use anyhow::Result;
 use asyncgit::sync::{
-	checkout_commit, BranchDetails, BranchInfo, CommitId,
+	checkout_commit, BranchDetails, BranchInfo, CommitId, CommitInfo,
 	RepoPathRef, Tags,
 };
 use chrono::{DateTime, Local};
@@ -38,7 +39,8 @@ const ELEMENTS_PER_LINE: usize = 9;
 
 #[derive(PartialEq)]
 enum Focused {
-	Input,
+	InputSearch,
+	InputFilter,
 	List,
 }
 
@@ -60,7 +62,9 @@ pub struct CommitList {
 	queue: Queue,
 	key_config: SharedKeyConfig,
 	search_field: TextInputComponent,
+	filter_field: TextInputComponent,
 	search_options: SearchOptionsPopupComponent,
+	filter_options: FilterOptionsPopupComponent,
 	focused_field: Focused,
 	current_search: String,
 }
@@ -99,7 +103,20 @@ impl CommitList {
 			)
 			.with_input_type(super::InputType::Singleline)
 			.make_embed(),
+			filter_field: TextInputComponent::new(
+				theme.clone(),
+				key_config.clone(),
+				"Filter commits...",
+				"Enter text to filter by",
+				false,
+			)
+			.with_input_type(super::InputType::Singleline)
+			.make_embed(),
 			search_options: SearchOptionsPopupComponent::new(
+				theme.clone(),
+				key_config.clone(),
+			),
+			filter_options: FilterOptionsPopupComponent::new(
 				theme.clone(),
 				key_config.clone(),
 			),
@@ -112,7 +129,7 @@ impl CommitList {
 	pub fn show_search(&mut self) {
 		if let Ok(_) = self.search_field.show() {
 			self.search_field.clear();
-			self.focused_field = Focused::Input;
+			self.focused_field = Focused::InputSearch;
 		}
 	}
 
@@ -122,20 +139,59 @@ impl CommitList {
 		self.focused_field = Focused::List;
 	}
 
+	pub fn show_filter(&mut self) {
+		if let Ok(_) = self.filter_field.show() {
+			self.filter_field.clear();
+			self.focused_field = Focused::InputFilter;
+		}
+	}
+
+	pub fn stop_filter(&mut self) {
+		self.filter_field.clear();
+		self.filter_field.hide();
+		self.focused_field = Focused::List;
+	}
+
 	pub fn toggle_input_focus(&mut self) {
-		self.focused_field = if self.search_field.is_visible() {
-			match self.focused_field {
-				Focused::Input => Focused::List,
-				Focused::List => Focused::Input,
+		self.focused_field = match self.focused_field {
+			Focused::InputFilter
+				if self.search_field.is_visible() =>
+			{
+				Focused::InputSearch
 			}
-		} else {
-			Focused::List
+			Focused::InputFilter => Focused::List,
+			Focused::List if self.filter_field.is_visible() => {
+				Focused::InputFilter
+			}
+			Focused::List if self.search_field.is_visible() => {
+				Focused::InputSearch
+			}
+			_ => Focused::List,
 		};
 	}
 
 	///
 	pub fn items(&mut self) -> &mut ItemBatch {
 		&mut self.items
+	}
+
+	pub fn filter_commits(
+		&self,
+		list: Vec<CommitInfo>,
+	) -> Vec<CommitInfo> {
+		let filter_by = self.filter_field.get_text();
+		if filter_by.is_empty() {
+			list
+		} else {
+			list.into_iter()
+				.filter(|i| {
+					(self.filter_options.author
+						&& i.author.contains(filter_by))
+						|| (self.filter_options.message
+							&& i.message.contains(filter_by))
+				})
+				.collect()
+		}
 	}
 
 	///
@@ -535,6 +591,11 @@ impl CommitList {
 							.1
 							.author
 							.contains(&self.current_search))
+					|| (self.search_options.sha
+						&& item
+							.1
+							.hash_full
+							.contains(&self.current_search))
 			})
 			.map(|item| item.0)
 			.nth(0);
@@ -560,6 +621,11 @@ impl CommitList {
 						&& item
 							.1
 							.author
+							.contains(&self.current_search))
+					|| (self.search_options.sha
+						&& item
+							.1
+							.hash_full
 							.contains(&self.current_search))
 			})
 			.map(|item| item.0)
@@ -643,6 +709,13 @@ impl CommitList {
 					self.key_config.keys.exit_popup,
 				) {
 					self.stop_search();
+					self.stop_filter();
+					true
+				} else if key_match(
+					k,
+					self.key_config.keys.filter_commits,
+				) {
+					self.show_filter();
 					true
 				} else if key_match(
 					k,
@@ -669,6 +742,105 @@ impl CommitList {
 		}
 		Ok(EventState::NotConsumed)
 	}
+
+	fn search_input_event(
+		&mut self,
+		ev: &Event,
+	) -> Result<EventState> {
+		if let Event::Key(k) = ev {
+			if key_match(k, self.key_config.keys.enter) {
+				self.focused_field = Focused::List;
+				self.current_search =
+					self.search_field.get_text().to_string();
+				//start actual search
+				self.search_commit_forward();
+				Ok(EventState::Consumed)
+			} else if key_match(k, self.key_config.keys.exit_popup) {
+				self.stop_search();
+				Ok(EventState::Consumed)
+			} else if key_match(
+				k,
+				self.key_config.keys.toggle_workarea,
+			) {
+				self.toggle_input_focus();
+				Ok(EventState::Consumed)
+			} else if key_match(
+				k,
+				self.key_config.keys.open_suboptions,
+			) {
+				self.search_options.show()?;
+				Ok(EventState::Consumed)
+			} else {
+				self.search_field.event(ev)
+			}
+		} else {
+			self.search_field.event(ev)
+		}
+	}
+
+	fn filter_input_event(
+		&mut self,
+		ev: &Event,
+	) -> Result<EventState> {
+		if let Event::Key(k) = ev {
+			if key_match(k, self.key_config.keys.enter) {
+				self.focused_field = Focused::List;
+				//refresh commit list
+				Ok(EventState::Consumed)
+			} else if key_match(k, self.key_config.keys.exit_popup) {
+				self.stop_filter();
+				Ok(EventState::Consumed)
+			} else if key_match(
+				k,
+				self.key_config.keys.toggle_workarea,
+			) {
+				self.toggle_input_focus();
+				Ok(EventState::Consumed)
+			} else if key_match(
+				k,
+				self.key_config.keys.open_suboptions,
+			) {
+				self.filter_options.show()?;
+				Ok(EventState::Consumed)
+			} else {
+				self.filter_field.event(ev)
+			}
+		} else {
+			self.filter_field.event(ev)
+		}
+	}
+
+	fn draw_input_field<B: Backend>(
+		&self,
+		f: &mut Frame<B>,
+		field: &TextInputComponent,
+		title: &str,
+		area: Rect,
+		selected: bool,
+	) -> Result<()> {
+		if field.is_visible() {
+			f.render_widget(
+				Block::default()
+					.borders(
+						Borders::TOP | Borders::RIGHT | Borders::LEFT,
+					)
+					.title(Span::styled(
+						title,
+						self.theme.title(selected),
+					))
+					.border_style(self.theme.block(selected)),
+				area,
+			);
+			let edit_area = Rect::new(
+				area.x + 1,
+				area.y + 1,
+				area.width - 2,
+				area.height - 1,
+			);
+			field.draw(f, edit_area)?;
+		}
+		Ok(())
+	}
 }
 
 impl DrawableComponent for CommitList {
@@ -678,42 +850,43 @@ impl DrawableComponent for CommitList {
 		area: Rect,
 	) -> Result<()> {
 		let original_area = area.clone();
-		let search_focused = self.focused_field == Focused::Input;
-		let area = if self.search_field.is_visible() {
-			let v_blocks = Layout::default()
-				.direction(ratatui::layout::Direction::Vertical)
-				.constraints(
-					[
-						Constraint::Length(2),
-						Constraint::Percentage(100),
-					]
-					.as_ref(),
-				)
-				.split(area);
+		let v_size_search =
+			if self.search_field.is_visible() { 2 } else { 0 };
+		let v_size_filter =
+			if self.filter_field.is_visible() { 2 } else { 0 };
+		let v_blocks = Layout::default()
+			.direction(ratatui::layout::Direction::Vertical)
+			.constraints(
+				[
+					Constraint::Length(v_size_filter),
+					Constraint::Length(v_size_search),
+					Constraint::Percentage(100),
+				]
+				.as_ref(),
+			)
+			.split(area);
+		let filter_area = v_blocks[0];
+		let search_area = v_blocks[1];
+		let list_area = v_blocks[2];
 
-			f.render_widget(
-				Block::default()
-					.borders(
-						Borders::TOP | Borders::RIGHT | Borders::LEFT,
-					)
-					.title(Span::styled(
-						"Search for...",
-						self.theme.title(search_focused),
-					))
-					.border_style(self.theme.block(search_focused)),
-				v_blocks[0],
-			);
-			let edit_area = Rect::new(
-				v_blocks[0].x + 1,
-				v_blocks[0].y + 1,
-				v_blocks[0].width - 2,
-				v_blocks[0].height - 1,
-			);
-			self.search_field.draw(f, edit_area)?;
-			v_blocks[1]
-		} else {
-			area
-		};
+		self.draw_input_field(
+			f,
+			&self.filter_field,
+			"Filter with...",
+			filter_area,
+			self.focused_field == Focused::InputFilter,
+		)?;
+
+		self.draw_input_field(
+			f,
+			&self.search_field,
+			"Search for...",
+			search_area,
+			self.focused_field == Focused::InputSearch,
+		)?;
+
+		let area = list_area;
+		let list_focused = self.focused_field == Focused::List;
 
 		let current_size = (
 			area.width.saturating_sub(2),
@@ -749,9 +922,9 @@ impl DrawableComponent for CommitList {
 					.borders(Borders::ALL)
 					.title(Span::styled(
 						title.as_str(),
-						self.theme.title(!search_focused),
+						self.theme.title(list_focused),
 					))
-					.border_style(self.theme.block(!search_focused)),
+					.border_style(self.theme.block(list_focused)),
 			)
 			.alignment(Alignment::Left),
 			area,
@@ -768,6 +941,8 @@ impl DrawableComponent for CommitList {
 
 		if self.search_options.is_visible() {
 			self.search_options.draw(f, original_area)?;
+		} else if self.filter_options.is_visible() {
+			self.filter_options.draw(f, original_area)?;
 		}
 
 		Ok(())
@@ -779,43 +954,14 @@ impl Component for CommitList {
 		if self.search_options.is_visible() {
 			self.search_options.event(ev)?;
 			return Ok(EventState::Consumed);
+		} else if self.filter_options.is_visible() {
+			self.filter_options.event(ev)?;
+			return Ok(EventState::Consumed);
 		}
 		match self.focused_field {
 			Focused::List => self.list_event(ev),
-			Focused::Input => {
-				if let Event::Key(k) = ev {
-					if key_match(k, self.key_config.keys.enter) {
-						self.toggle_input_focus();
-						self.current_search =
-							self.search_field.get_text().to_string();
-						//start actual search
-						self.search_commit_forward();
-						Ok(EventState::Consumed)
-					} else if key_match(
-						k,
-						self.key_config.keys.exit_popup,
-					) {
-						self.stop_search();
-						Ok(EventState::Consumed)
-					} else if key_match(
-						k,
-						self.key_config.keys.toggle_workarea,
-					) {
-						self.toggle_input_focus();
-						Ok(EventState::Consumed)
-					} else if key_match(
-						k,
-						self.key_config.keys.open_suboptions,
-					) {
-						self.search_options.show()?;
-						Ok(EventState::Consumed)
-					} else {
-						self.search_field.event(ev)
-					}
-				} else {
-					self.search_field.event(ev)
-				}
-			}
+			Focused::InputSearch => self.search_input_event(ev),
+			Focused::InputFilter => self.filter_input_event(ev),
 		}
 	}
 

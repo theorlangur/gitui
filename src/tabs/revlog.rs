@@ -184,6 +184,7 @@ impl Revlog {
 		);
 
 		if let Ok(commits) = commits {
+			let commits = self.list.filter_commits(commits);
 			self.list.items().set_items(want_min, commits);
 		}
 

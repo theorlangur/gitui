@@ -16,6 +16,7 @@ mod externaleditor;
 mod fetch;
 mod file_find_popup;
 mod file_revlog;
+mod filter_options;
 mod help;
 mod inspect_commit;
 mod msg;
