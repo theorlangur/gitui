@@ -1,6 +1,4 @@
-use std::{
-	cell::RefCell, os::unix::prelude::OsStrExt, process::Command,
-};
+use std::{cell::RefCell, process::Command};
 
 use super::{
 	utils::string_width_align, visibility_blocking, CommandBlocking,
@@ -119,11 +117,8 @@ impl ExternalCommandPopupComponent {
 					crate::queue::InternalEvent::ShowErrorMsg(
 						format!(
 							"{}",
-							std::ffi::OsStr::from_bytes(
-								o.stderr.as_slice()
-							)
-							.to_str()
-							.unwrap_or_default()
+							std::str::from_utf8(o.stderr.as_slice())
+								.unwrap_or_default()
 						),
 					),
 				);
@@ -132,11 +127,8 @@ impl ExternalCommandPopupComponent {
 					crate::queue::InternalEvent::ShowInfoMsg(
 						format!(
 							"{}",
-							std::ffi::OsStr::from_bytes(
-								o.stdout.as_slice()
-							)
-							.to_str()
-							.unwrap_or_default()
+							std::str::from_utf8(o.stdout.as_slice())
+								.unwrap_or_default()
 						),
 					),
 				);

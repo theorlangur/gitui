@@ -1,7 +1,7 @@
 use crate::notify_mutex::NotifyableMutex;
 use anyhow::Result;
 use crossbeam_channel::{unbounded, Receiver, Sender};
-use crossterm::event::{self, Event};
+use crossterm::event::{self, Event, KeyEventKind};
 use std::{
 	sync::{
 		atomic::{AtomicBool, Ordering},
@@ -113,6 +113,13 @@ impl Input {
 				arc_current.store(true, Ordering::Relaxed);
 
 				if let Some(e) = Self::poll(POLL_DURATION)? {
+					if let Event::Key(e) = &e {
+						if e.kind == KeyEventKind::Release {
+							//skip all release events
+							//doesn't work properly on windows
+							continue;
+						}
+					}
 					tx.send(InputEvent::Input(e))?;
 				}
 			} else {
