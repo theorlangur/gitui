@@ -194,7 +194,8 @@ impl CommitList {
 		if self.filter_field.is_visible()
 			&& !self.filter_field.get_text().is_empty()
 		{
-			let filter_txt = self.filter_field.get_text().to_string();
+			let filter_txt =
+				self.filter_field.get_text().to_lowercase();
 			let filter_author = self.filter_options.author;
 			let filter_msg = self.filter_options.message;
 			Some(std::sync::Arc::new(Box::new(
@@ -208,6 +209,7 @@ impl CommitList {
 							.author()
 							.name()
 							.unwrap()
+							.to_lowercase()
 							.contains(&filter_txt)
 					{
 						Ok(true)
@@ -215,6 +217,7 @@ impl CommitList {
 						&& commit
 							.message()
 							.unwrap()
+							.to_lowercase()
 							.contains(&filter_txt)
 					{
 						Ok(true)
@@ -612,6 +615,7 @@ impl CommitList {
 		if self.current_search.is_empty() {
 			return ();
 		}
+		let needle = self.current_search.to_lowercase();
 		let res = self
 			.items
 			.iter()
@@ -619,17 +623,18 @@ impl CommitList {
 			.skip(self.selection + 1)
 			.filter(|item| {
 				(self.search_options.message
-					&& item.1.msg.contains(&self.current_search))
+					&& item.1.msg.to_lowercase().contains(&needle))
 					|| (self.search_options.author
 						&& item
 							.1
 							.author
-							.contains(&self.current_search))
-					|| (self.search_options.sha
-						&& item
-							.1
-							.hash_full
-							.contains(&self.current_search))
+							.to_lowercase()
+							.contains(&needle)) || (self.search_options.sha
+					&& item
+						.1
+						.hash_full
+						.to_lowercase()
+						.contains(&needle))
 			})
 			.map(|item| item.0)
 			.nth(0);
@@ -642,6 +647,7 @@ impl CommitList {
 		if self.current_search.is_empty() {
 			return ();
 		}
+		let needle = self.current_search.to_lowercase();
 		let res = self
 			.items
 			.iter()
@@ -650,17 +656,18 @@ impl CommitList {
 			.rev()
 			.filter(|item| {
 				(self.search_options.message
-					&& item.1.msg.contains(&self.current_search))
+					&& item.1.msg.to_lowercase().contains(&needle))
 					|| (self.search_options.author
 						&& item
 							.1
 							.author
-							.contains(&self.current_search))
-					|| (self.search_options.sha
-						&& item
-							.1
-							.hash_full
-							.contains(&self.current_search))
+							.to_lowercase()
+							.contains(&needle)) || (self.search_options.sha
+					&& item
+						.1
+						.hash_full
+						.to_lowercase()
+						.contains(&needle))
 			})
 			.map(|item| item.0)
 			.nth(0);
