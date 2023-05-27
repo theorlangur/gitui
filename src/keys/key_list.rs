@@ -223,7 +223,7 @@ impl Default for KeysList {
 			copy_clipboard_author: GituiKeyEvent::new(KeyCode::Char('a'),  KeyModifiers::empty()),
 			copy_clipboard_message: GituiKeyEvent::new(KeyCode::Char('m'),  KeyModifiers::empty()),
 			copy_clipboard_summary: GituiKeyEvent::new(KeyCode::Char('S'),  KeyModifiers::SHIFT),
-			run_external_command: GituiKeyEvent::new(KeyCode::Char(':'),  KeyModifiers::empty()),
+			run_external_command: GituiKeyEvent::new(KeyCode::Char(':'),  KeyModifiers::SHIFT),
 			start_search_forward_init: GituiKeyEvent::new(KeyCode::Char('/'),  KeyModifiers::empty()),
 			start_search_backward_init: GituiKeyEvent::new(KeyCode::Char('?'),  KeyModifiers::empty()),
 			search_filter_author: GituiKeyEvent::new(KeyCode::Char('a'),  KeyModifiers::empty()),
