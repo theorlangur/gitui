@@ -97,6 +97,24 @@ impl FilterOptionsPopupComponent {
 			self.title += ")";
 		}
 	}
+
+	pub fn enable_all(&mut self) {
+		self.author = true;
+		self.message = true;
+		self.update_title();
+	}
+
+	pub fn author_only(&mut self) {
+		self.author = true;
+		self.message = false;
+		self.update_title();
+	}
+
+	pub fn message_only(&mut self) {
+		self.author = false;
+		self.message = true;
+		self.update_title();
+	}
 }
 
 impl DrawableComponent for FilterOptionsPopupComponent {
@@ -140,6 +158,18 @@ impl Component for FilterOptionsPopupComponent {
 		if self.is_visible() || force_all {
 			out.push(CommandInfo::new(
 				strings::commands::close_popup(&self.key_config),
+				true,
+				true,
+			));
+
+			out.push(CommandInfo::new(
+				strings::commands::scroll(&self.key_config),
+				true,
+				true,
+			));
+
+			out.push(CommandInfo::new(
+				strings::commands::toggle_option(&self.key_config),
 				true,
 				true,
 			));

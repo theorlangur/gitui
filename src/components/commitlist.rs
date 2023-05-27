@@ -44,6 +44,14 @@ enum Focused {
 	List,
 }
 
+#[derive(PartialEq)]
+enum KeyComboState {
+	Empty,
+	SearchInitForward,
+	//SearchInitBackward,
+	FilterInit,
+}
+
 ///
 pub struct CommitList {
 	repo: RepoPathRef,
@@ -68,6 +76,7 @@ pub struct CommitList {
 	focused_field: Focused,
 	current_search: String,
 	filter_updated: bool,
+	combo_state: KeyComboState,
 }
 
 impl CommitList {
@@ -124,6 +133,7 @@ impl CommitList {
 			focused_field: Focused::List,
 			current_search: String::new(),
 			filter_updated: true,
+			combo_state: KeyComboState::Empty,
 		}
 	}
 
@@ -695,6 +705,68 @@ impl CommitList {
 
 	fn list_event(&mut self, ev: &Event) -> Result<EventState> {
 		if let Event::Key(k) = ev {
+			match self.combo_state {
+				KeyComboState::SearchInitForward => {
+					self.combo_state = KeyComboState::Empty;
+					if key_match(
+						k,
+						self.key_config
+							.keys
+							.start_search_forward_init,
+					) {
+						self.search_options.enable_all();
+						self.show_search();
+						return Ok(EventState::Consumed);
+					} else if key_match(
+						k,
+						self.key_config.keys.search_filter_author,
+					) {
+						self.search_options.author_only();
+						self.show_search();
+						return Ok(EventState::Consumed);
+					} else if key_match(
+						k,
+						self.key_config.keys.search_filter_msg,
+					) {
+						self.search_options.message_only();
+						self.show_search();
+						return Ok(EventState::Consumed);
+					} else if key_match(
+						k,
+						self.key_config.keys.search_sha,
+					) {
+						self.search_options.sha_only();
+						self.show_search();
+						return Ok(EventState::Consumed);
+					}
+				}
+				KeyComboState::FilterInit => {
+					self.combo_state = KeyComboState::Empty;
+					if key_match(
+						k,
+						self.key_config.keys.filter_commits_init,
+					) {
+						self.filter_options.enable_all();
+						self.show_filter();
+						return Ok(EventState::Consumed);
+					} else if key_match(
+						k,
+						self.key_config.keys.search_filter_author,
+					) {
+						self.filter_options.author_only();
+						self.show_filter();
+						return Ok(EventState::Consumed);
+					} else if key_match(
+						k,
+						self.key_config.keys.search_filter_msg,
+					) {
+						self.filter_options.message_only();
+						self.show_filter();
+						return Ok(EventState::Consumed);
+					}
+				}
+				KeyComboState::Empty => {}
+			};
 			let selection_changed =
 				if key_match(k, self.key_config.keys.move_up) {
 					self.move_selection(ScrollType::Up)?
@@ -730,9 +802,11 @@ impl CommitList {
 					true
 				} else if key_match(
 					k,
-					self.key_config.keys.start_search_forward,
+					self.key_config.keys.start_search_forward_init,
 				) {
-					self.show_search();
+					self.combo_state =
+						KeyComboState::SearchInitForward;
+					//self.show_search();
 					true
 				} else if key_match(
 					k,
@@ -743,9 +817,10 @@ impl CommitList {
 					true
 				} else if key_match(
 					k,
-					self.key_config.keys.filter_commits,
+					self.key_config.keys.filter_commits_init,
 				) {
-					self.show_filter();
+					self.combo_state = KeyComboState::FilterInit;
+					//self.show_filter();
 					true
 				} else if key_match(
 					k,
@@ -1003,6 +1078,9 @@ impl Component for CommitList {
 		if self.search_options.is_visible() {
 			return self.search_options.commands(out, _force_all);
 		}
+		if self.filter_options.is_visible() {
+			return self.filter_options.commands(out, _force_all);
+		}
 		out.push(CommandInfo::new(
 			strings::commands::scroll(&self.key_config),
 			self.selected_entry().is_some(),
@@ -1013,6 +1091,41 @@ impl Component for CommitList {
 				&self.key_config,
 				self.selected_entry_marked(),
 			),
+			true,
+			true,
+		));
+		out.push(CommandInfo::new(
+			strings::commands::search_all(&self.key_config),
+			true,
+			true,
+		));
+		out.push(CommandInfo::new(
+			strings::commands::search_author(&self.key_config),
+			true,
+			true,
+		));
+		out.push(CommandInfo::new(
+			strings::commands::search_msg(&self.key_config),
+			true,
+			true,
+		));
+		out.push(CommandInfo::new(
+			strings::commands::search_sha(&self.key_config),
+			true,
+			true,
+		));
+		out.push(CommandInfo::new(
+			strings::commands::filter_all(&self.key_config),
+			true,
+			true,
+		));
+		out.push(CommandInfo::new(
+			strings::commands::filter_author(&self.key_config),
+			true,
+			true,
+		));
+		out.push(CommandInfo::new(
+			strings::commands::filter_msg(&self.key_config),
 			true,
 			true,
 		));

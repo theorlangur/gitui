@@ -561,6 +561,105 @@ pub mod commands {
 			CMD_GROUP_DIFF,
 		)
 	}
+	pub fn filter_all(key_config: &SharedKeyConfig) -> CommandText {
+		CommandText::new(
+			format!(
+				"Filter all [{}{}]",
+				key_config
+					.get_hint(key_config.keys.filter_commits_init),
+				key_config
+					.get_hint(key_config.keys.filter_commits_init),
+			),
+			"Start filteringl by Author/Message",
+			CMD_GROUP_GENERAL,
+		)
+	}
+	pub fn filter_author(
+		key_config: &SharedKeyConfig,
+	) -> CommandText {
+		CommandText::new(
+			format!(
+				"Filter author [{}{}]",
+				key_config
+					.get_hint(key_config.keys.filter_commits_init),
+				key_config
+					.get_hint(key_config.keys.search_filter_author),
+			),
+			"Start searching by Author",
+			CMD_GROUP_GENERAL,
+		)
+	}
+	pub fn filter_msg(key_config: &SharedKeyConfig) -> CommandText {
+		CommandText::new(
+			format!(
+				"Filter message [{}{}]",
+				key_config
+					.get_hint(key_config.keys.filter_commits_init),
+				key_config
+					.get_hint(key_config.keys.search_filter_msg),
+			),
+			"Start searching by message",
+			CMD_GROUP_GENERAL,
+		)
+	}
+	pub fn search_all(key_config: &SharedKeyConfig) -> CommandText {
+		CommandText::new(
+			format!(
+				"Search all [{}{}]",
+				key_config.get_hint(
+					key_config.keys.start_search_forward_init
+				),
+				key_config.get_hint(
+					key_config.keys.start_search_forward_init
+				),
+			),
+			"Start searching by Author/Message/SHA",
+			CMD_GROUP_GENERAL,
+		)
+	}
+	pub fn search_author(
+		key_config: &SharedKeyConfig,
+	) -> CommandText {
+		CommandText::new(
+			format!(
+				"Search author [{}{}]",
+				key_config.get_hint(
+					key_config.keys.start_search_forward_init
+				),
+				key_config
+					.get_hint(key_config.keys.search_filter_author),
+			),
+			"Start searching by Author",
+			CMD_GROUP_GENERAL,
+		)
+	}
+	pub fn search_msg(key_config: &SharedKeyConfig) -> CommandText {
+		CommandText::new(
+			format!(
+				"Search message [{}{}]",
+				key_config.get_hint(
+					key_config.keys.start_search_forward_init
+				),
+				key_config
+					.get_hint(key_config.keys.search_filter_msg),
+			),
+			"Start searching by message",
+			CMD_GROUP_GENERAL,
+		)
+	}
+	pub fn search_sha(key_config: &SharedKeyConfig) -> CommandText {
+		CommandText::new(
+			format!(
+				"Search SHA [{}{}]",
+				key_config.get_hint(
+					key_config.keys.start_search_forward_init
+				),
+				key_config.get_hint(key_config.keys.search_sha),
+			),
+			"Start searching by SHA",
+			CMD_GROUP_GENERAL,
+		)
+	}
 	pub fn copy_clipboard_info(
 		key_config: &SharedKeyConfig,
 	) -> CommandText {
@@ -1104,6 +1203,19 @@ pub mod commands {
 		CommandText::new(
 			format!(
 				"Unstage [{}]",
+				key_config
+					.get_hint(key_config.keys.stage_unstage_item),
+			),
+			"unstage currently selected file or entire path",
+			CMD_GROUP_CHANGES,
+		)
+	}
+	pub fn toggle_option(
+		key_config: &SharedKeyConfig,
+	) -> CommandText {
+		CommandText::new(
+			format!(
+				"Toggle option [{}]",
 				key_config
 					.get_hint(key_config.keys.stage_unstage_item),
 			),

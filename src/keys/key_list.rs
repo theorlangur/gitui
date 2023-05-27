@@ -123,12 +123,15 @@ pub struct KeysList {
 	pub copy_clipboard_message: GituiKeyEvent,
 	pub copy_clipboard_summary: GituiKeyEvent,
 	pub run_external_command: GituiKeyEvent,
-	pub start_search_forward: GituiKeyEvent,
-	pub start_search_backward: GituiKeyEvent,
+	pub start_search_forward_init: GituiKeyEvent,
+	pub start_search_backward_init: GituiKeyEvent,
+	pub search_filter_author: GituiKeyEvent,
+	pub search_filter_msg: GituiKeyEvent,
+	pub search_sha: GituiKeyEvent,
 	pub search_next: GituiKeyEvent,
 	pub search_prev: GituiKeyEvent,
 	pub open_suboptions: GituiKeyEvent,
-	pub filter_commits: GituiKeyEvent,
+	pub filter_commits_init: GituiKeyEvent,
 }
 
 #[rustfmt::skip]
@@ -221,12 +224,15 @@ impl Default for KeysList {
 			copy_clipboard_message: GituiKeyEvent::new(KeyCode::Char('m'),  KeyModifiers::empty()),
 			copy_clipboard_summary: GituiKeyEvent::new(KeyCode::Char('S'),  KeyModifiers::SHIFT),
 			run_external_command: GituiKeyEvent::new(KeyCode::Char(':'),  KeyModifiers::empty()),
-			start_search_forward: GituiKeyEvent::new(KeyCode::Char('/'),  KeyModifiers::empty()),
-			start_search_backward: GituiKeyEvent::new(KeyCode::Char('?'),  KeyModifiers::empty()),
+			start_search_forward_init: GituiKeyEvent::new(KeyCode::Char('/'),  KeyModifiers::empty()),
+			start_search_backward_init: GituiKeyEvent::new(KeyCode::Char('?'),  KeyModifiers::empty()),
+			search_filter_author: GituiKeyEvent::new(KeyCode::Char('a'),  KeyModifiers::empty()),
+			search_filter_msg: GituiKeyEvent::new(KeyCode::Char('m'),  KeyModifiers::empty()),
+			search_sha: GituiKeyEvent::new(KeyCode::Char('s'),  KeyModifiers::empty()),
 			search_next: GituiKeyEvent::new(KeyCode::Char('n'),  KeyModifiers::empty()),
 			search_prev: GituiKeyEvent::new(KeyCode::Char('N'),  KeyModifiers::SHIFT),
 			open_suboptions: GituiKeyEvent::new(KeyCode::Char('o'),  KeyModifiers::CONTROL),
-			filter_commits: GituiKeyEvent::new(KeyCode::Char('='),  KeyModifiers::empty()),
+			filter_commits_init: GituiKeyEvent::new(KeyCode::Char('='),  KeyModifiers::empty()),
 		}
 	}
 }
