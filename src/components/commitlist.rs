@@ -633,6 +633,12 @@ impl CommitList {
 		self.current_search.to_lowercase()
 	}
 
+	pub fn is_search_hash_only(&self) -> bool {
+		return !self.search_options.message
+			&& !self.search_options.author
+			&& self.search_options.sha;
+	}
+
 	pub fn search_commit_check(
 		&self,
 		needle: &str,

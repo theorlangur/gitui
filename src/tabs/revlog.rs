@@ -96,17 +96,22 @@ impl Revlog {
 		needle: &str,
 		commit_id: &CommitId,
 	) -> bool {
-		let commit =
-			sync::get_commit_info(&self.repo.borrow(), commit_id);
-		if let Ok(c) = commit {
-			self.list.search_commit_check(
-				&needle,
-				&c.author,
-				&c.message,
-				&c.id.to_string(),
-			)
+		if self.list.is_search_hash_only() {
+			//no need to get a commit info
+			commit_id.to_string().to_lowercase().contains(needle)
 		} else {
-			false
+			let commit =
+				sync::get_commit_info(&self.repo.borrow(), commit_id);
+			if let Ok(c) = commit {
+				self.list.search_commit_check(
+					&needle,
+					&c.author,
+					&c.message,
+					&c.id.to_string(),
+				)
+			} else {
+				false
+			}
 		}
 	}
 
