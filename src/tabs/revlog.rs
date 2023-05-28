@@ -3,7 +3,7 @@ use crate::{
 		visibility_blocking, CommandBlocking, CommandInfo,
 		CommitDetailsComponent, CommitList, Component,
 		CopyClipboardOpen, DrawableComponent, EventState,
-		FileTreeOpen, InspectCommitOpen,
+		ExternalSearchRequest, FileTreeOpen, InspectCommitOpen,
 	},
 	keys::{key_match, SharedKeyConfig},
 	queue::{InternalEvent, Queue, StackablePopupOpen},
@@ -91,6 +91,25 @@ impl Revlog {
 			|| self.commit_details.any_work_pending()
 	}
 
+	fn search_commit_callback(
+		&self,
+		needle: &str,
+		commit_id: &CommitId,
+	) -> bool {
+		let commit =
+			sync::get_commit_info(&self.repo.borrow(), commit_id);
+		if let Ok(c) = commit {
+			self.list.search_commit_check(
+				&needle,
+				&c.author,
+				&c.message,
+				&c.id.to_string(),
+			)
+		} else {
+			false
+		}
+	}
+
 	///
 	pub fn update(&mut self) -> Result<()> {
 		if self.is_visible() {
@@ -102,6 +121,34 @@ impl Revlog {
 				self.git_log.fetch()? == FetchStatus::Started;
 
 			self.list.set_count_total(self.git_log.count()?);
+
+			let ex_req = self.list.has_extended_search_request();
+			if ex_req != ExternalSearchRequest::Empty {
+				let needle = self.list.get_search_needle();
+				let ext_search =
+					if ex_req == ExternalSearchRequest::Forward {
+						self.git_log.search_commit_forward(
+							self.list.selection() + 1,
+							|commit_id| {
+								self.search_commit_callback(
+									&needle, commit_id,
+								)
+							},
+						)
+					} else {
+						self.git_log.search_commit_backward(
+							self.list.selection(),
+							|commit_id| {
+								self.search_commit_callback(
+									&needle, commit_id,
+								)
+							},
+						)
+					};
+				if let Some(search_result) = ext_search {
+					self.list.select_entry(search_result);
+				}
+			}
 
 			let selection = self.list.selection();
 			let selection_max = self.list.selection_max();

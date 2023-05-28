@@ -47,7 +47,7 @@ pub use changes::ChangesComponent;
 pub use command::{CommandInfo, CommandText};
 pub use commit::CommitComponent;
 pub use commit_details::CommitDetailsComponent;
-pub use commitlist::CommitList;
+pub use commitlist::{CommitList, ExternalSearchRequest};
 pub use compare_commits::CompareCommitsComponent;
 pub use copy_clipboard_popup::{
 	CopyClipboardOpen, CopyPopupComponent,

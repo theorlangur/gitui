@@ -2,6 +2,7 @@ use super::filter_options::FilterOptionsPopupComponent;
 use super::search_options::SearchOptionsPopupComponent;
 use super::utils::logitems::{ItemBatch, LogEntry};
 use super::TextInputComponent;
+use crate::queue::{InternalEvent, NeedsUpdate};
 use crate::{
 	components::{
 		utils::string_width_align, CommandBlocking, CommandInfo,
@@ -52,6 +53,13 @@ enum KeyComboState {
 	FilterInit,
 }
 
+#[derive(PartialEq, Clone)]
+pub enum ExternalSearchRequest {
+	Empty,
+	Forward,
+	Backward,
+}
+
 ///
 pub struct CommitList {
 	repo: RepoPathRef,
@@ -77,6 +85,7 @@ pub struct CommitList {
 	current_search: String,
 	filter_updated: bool,
 	combo_state: KeyComboState,
+	extended_search_request: ExternalSearchRequest,
 }
 
 impl CommitList {
@@ -134,6 +143,7 @@ impl CommitList {
 			current_search: String::new(),
 			filter_updated: true,
 			combo_state: KeyComboState::Empty,
+			extended_search_request: ExternalSearchRequest::Empty,
 		}
 	}
 
@@ -611,35 +621,59 @@ impl CommitList {
 		}
 	}
 
+	pub fn has_extended_search_request(
+		&mut self,
+	) -> ExternalSearchRequest {
+		let res = self.extended_search_request.clone();
+		self.extended_search_request = ExternalSearchRequest::Empty;
+		res
+	}
+
+	pub fn get_search_needle(&self) -> String {
+		self.current_search.to_lowercase()
+	}
+
+	pub fn search_commit_check(
+		&self,
+		needle: &str,
+		author: &str,
+		message: &str,
+		hash: &str,
+	) -> bool {
+		(self.search_options.message
+			&& message.to_lowercase().contains(needle))
+			|| (self.search_options.author
+				&& author.to_lowercase().contains(needle))
+			|| (self.search_options.sha
+				&& hash.to_lowercase().contains(&needle))
+	}
+
 	pub fn search_commit_forward(&mut self) {
 		if self.current_search.is_empty() {
 			return ();
 		}
-		let needle = self.current_search.to_lowercase();
+		let needle = self.get_search_needle();
 		let res = self
 			.items
 			.iter()
 			.enumerate()
 			.skip(self.selection + 1)
 			.filter(|item| {
-				(self.search_options.message
-					&& item.1.msg.to_lowercase().contains(&needle))
-					|| (self.search_options.author
-						&& item
-							.1
-							.author
-							.to_lowercase()
-							.contains(&needle)) || (self.search_options.sha
-					&& item
-						.1
-						.hash_full
-						.to_lowercase()
-						.contains(&needle))
+				self.search_commit_check(
+					&needle,
+					&item.1.author,
+					&item.1.msg,
+					&item.1.hash_full,
+				)
 			})
 			.map(|item| item.0)
 			.nth(0);
 		if let Some(idx) = res {
 			self.select_entry(idx);
+		} else {
+			self.extended_search_request =
+				ExternalSearchRequest::Forward;
+			self.queue.push(InternalEvent::Update(NeedsUpdate::ALL));
 		}
 	}
 
@@ -655,24 +689,21 @@ impl CommitList {
 			.enumerate()
 			.rev()
 			.filter(|item| {
-				(self.search_options.message
-					&& item.1.msg.to_lowercase().contains(&needle))
-					|| (self.search_options.author
-						&& item
-							.1
-							.author
-							.to_lowercase()
-							.contains(&needle)) || (self.search_options.sha
-					&& item
-						.1
-						.hash_full
-						.to_lowercase()
-						.contains(&needle))
+				self.search_commit_check(
+					&needle,
+					&item.1.author,
+					&item.1.msg,
+					&item.1.hash_full,
+				)
 			})
 			.map(|item| item.0)
 			.nth(0);
 		if let Some(idx) = res {
 			self.select_entry(idx);
+		} else if self.items.index_offset() > 0 {
+			self.extended_search_request =
+				ExternalSearchRequest::Backward;
+			self.queue.push(InternalEvent::Update(NeedsUpdate::ALL));
 		}
 	}
 

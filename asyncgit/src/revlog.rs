@@ -80,6 +80,47 @@ impl AsyncLog {
 	}
 
 	///
+	pub fn search_commit_forward<F>(
+		&self,
+		start_index: usize,
+		predicate: F,
+	) -> Option<usize>
+	where
+		F: Fn(&CommitId) -> bool,
+	{
+		if let Ok(list) = self.current.lock() {
+			list.iter()
+				.enumerate()
+				.skip(start_index)
+				.find(|i| predicate(i.1))
+				.map(|i| i.0)
+		} else {
+			None
+		}
+	}
+
+	///
+	pub fn search_commit_backward<F>(
+		&self,
+		start_index: usize,
+		predicate: F,
+	) -> Option<usize>
+	where
+		F: Fn(&CommitId) -> bool,
+	{
+		if let Ok(list) = self.current.lock() {
+			list.iter()
+				.take(start_index)
+				.enumerate()
+				.rev()
+				.find(|i| predicate(i.1))
+				.map(|i| i.0)
+		} else {
+			None
+		}
+	}
+
+	///
 	pub fn position(&self, id: CommitId) -> Result<Option<usize>> {
 		let list = self.current.lock()?;
 		let position = list.iter().position(|&x| x == id);
