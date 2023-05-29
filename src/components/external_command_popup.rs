@@ -112,7 +112,7 @@ impl ExternalCommandPopupComponent {
 			);
 		} else {
 			let o = _res.unwrap();
-			if !o.stderr.is_empty() {
+			if !o.stderr.is_empty() && !o.status.success() {
 				self.queue.push(
 					crate::queue::InternalEvent::ShowErrorMsg(
 						format!(
@@ -123,11 +123,16 @@ impl ExternalCommandPopupComponent {
 					),
 				);
 			} else {
+				let out_str = if !o.stdout.is_empty() {
+					o.stdout.as_slice()
+				} else {
+					o.stderr.as_slice()
+				};
 				self.queue.push(
 					crate::queue::InternalEvent::ShowInfoMsg(
 						format!(
 							"{}",
-							std::str::from_utf8(o.stdout.as_slice())
+							std::str::from_utf8(out_str)
 								.unwrap_or_default()
 						),
 					),
