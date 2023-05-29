@@ -91,30 +91,6 @@ impl Revlog {
 			|| self.commit_details.any_work_pending()
 	}
 
-	fn search_commit_callback(
-		&self,
-		needle: &str,
-		commit_id: &CommitId,
-	) -> bool {
-		if self.list.is_search_hash_only() {
-			//no need to get a commit info
-			commit_id.to_string().to_lowercase().contains(needle)
-		} else {
-			let commit =
-				sync::get_commit_info(&self.repo.borrow(), commit_id);
-			if let Ok(c) = commit {
-				self.list.search_commit_check(
-					&needle,
-					&c.author,
-					&c.message,
-					&c.id.to_string(),
-				)
-			} else {
-				false
-			}
-		}
-	}
-
 	///
 	pub fn update(&mut self) -> Result<()> {
 		if self.is_visible() {
@@ -130,24 +106,40 @@ impl Revlog {
 			let ex_req = self.list.has_extended_search_request();
 			if ex_req != ExternalSearchRequest::Empty {
 				let needle = self.list.get_search_needle();
+				let predicate = |commit_id: &CommitId| {
+					if self.list.is_search_hash_only() {
+						//no need to get a commit info
+						commit_id
+							.to_string()
+							.to_lowercase()
+							.contains(&needle)
+					} else {
+						let commit = sync::get_commit_info(
+							&self.repo.borrow(),
+							commit_id,
+						);
+						if let Ok(c) = commit {
+							self.list.search_commit_check(
+								&needle,
+								&c.author,
+								&c.message,
+								&c.id.to_string(),
+							)
+						} else {
+							false
+						}
+					}
+				};
 				let ext_search =
 					if ex_req == ExternalSearchRequest::Forward {
 						self.git_log.search_commit_forward(
 							self.list.selection() + 1,
-							|commit_id| {
-								self.search_commit_callback(
-									&needle, commit_id,
-								)
-							},
+							predicate,
 						)
 					} else {
 						self.git_log.search_commit_backward(
 							self.list.selection(),
-							|commit_id| {
-								self.search_commit_callback(
-									&needle, commit_id,
-								)
-							},
+							predicate,
 						)
 					};
 				if let Some(search_result) = ext_search {
