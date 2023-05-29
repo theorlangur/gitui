@@ -658,12 +658,14 @@ impl CommitList {
 		if self.current_search.is_empty() {
 			return ();
 		}
+		let local_selection =
+			self.selection - self.items.index_offset();
 		let needle = self.get_search_needle();
 		let res = self
 			.items
 			.iter()
 			.enumerate()
-			.skip(self.selection + 1)
+			.skip(local_selection + 1)
 			.filter(|item| {
 				self.search_commit_check(
 					&needle,
@@ -675,7 +677,7 @@ impl CommitList {
 			.map(|item| item.0)
 			.nth(0);
 		if let Some(idx) = res {
-			self.select_entry(idx);
+			self.select_entry(self.items.index_offset() + idx);
 		} else {
 			self.extended_search_request =
 				ExternalSearchRequest::Forward;
@@ -687,11 +689,13 @@ impl CommitList {
 		if self.current_search.is_empty() {
 			return ();
 		}
+		let local_selection =
+			self.selection - self.items.index_offset();
 		let needle = self.current_search.to_lowercase();
 		let res = self
 			.items
 			.iter()
-			.take(self.selection)
+			.take(local_selection)
 			.enumerate()
 			.rev()
 			.filter(|item| {
@@ -705,7 +709,7 @@ impl CommitList {
 			.map(|item| item.0)
 			.nth(0);
 		if let Some(idx) = res {
-			self.select_entry(idx);
+			self.select_entry(self.items.index_offset() + idx);
 		} else if self.items.index_offset() > 0 {
 			self.extended_search_request =
 				ExternalSearchRequest::Backward;
