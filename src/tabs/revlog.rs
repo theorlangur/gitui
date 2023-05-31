@@ -106,41 +106,52 @@ impl Revlog {
 			let ex_req = self.list.has_extended_search_request();
 			if ex_req != ExternalSearchRequest::Empty {
 				let needle = self.list.get_search_needle();
+				let hash_only = self.list.is_search_hash_only();
+				let predicate_hash_only = |commit_id: &CommitId| {
+					commit_id.to_string().contains(&needle)
+				};
 				let predicate = |commit_id: &CommitId| {
-					if self.list.is_search_hash_only() {
-						//no need to get a commit info
-						commit_id
-							.to_string()
-							.to_lowercase()
-							.contains(&needle)
+					let commit = sync::get_commit_info(
+						&self.repo.borrow(),
+						commit_id,
+					);
+					if let Ok(c) = commit {
+						self.list.search_commit_check(
+							&needle,
+							&c.author,
+							&c.message,
+							&c.id.to_string(),
+						)
 					} else {
-						let commit = sync::get_commit_info(
-							&self.repo.borrow(),
-							commit_id,
-						);
-						if let Ok(c) = commit {
-							self.list.search_commit_check(
-								&needle,
-								&c.author,
-								&c.message,
-								&c.id.to_string(),
-							)
-						} else {
-							false
-						}
+						false
 					}
 				};
+
 				let ext_search =
 					if ex_req == ExternalSearchRequest::Forward {
-						self.git_log.search_commit_forward(
-							self.list.selection() + 1,
-							predicate,
-						)
+						if hash_only {
+							self.git_log.search_commit_forward(
+								self.list.selection() + 1,
+								predicate_hash_only,
+							)
+						} else {
+							self.git_log.search_commit_forward(
+								self.list.selection() + 1,
+								predicate,
+							)
+						}
 					} else {
-						self.git_log.search_commit_backward(
-							self.list.selection(),
-							predicate,
-						)
+						if hash_only {
+							self.git_log.search_commit_backward(
+								self.list.selection(),
+								predicate_hash_only,
+							)
+						} else {
+							self.git_log.search_commit_backward(
+								self.list.selection(),
+								predicate,
+							)
+						}
 					};
 				if let Some(search_result) = ext_search {
 					self.list.select_entry(search_result);

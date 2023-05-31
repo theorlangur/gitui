@@ -650,8 +650,7 @@ impl CommitList {
 			&& message.to_lowercase().contains(needle))
 			|| (self.search_options.author
 				&& author.to_lowercase().contains(needle))
-			|| (self.search_options.sha
-				&& hash.to_lowercase().contains(&needle))
+			|| (self.search_options.sha && hash.contains(&needle))
 	}
 
 	pub fn search_commit_forward(&mut self) {
