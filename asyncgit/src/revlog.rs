@@ -217,22 +217,23 @@ impl AsyncLog {
 	) -> Result<()> {
 		let mut entries = Vec::with_capacity(LIMIT_COUNT);
 		let r = repo(repo_path)?;
+		let has_filter = filter.is_some();
 		let mut walker =
 			LogWalker::new(&r, LIMIT_COUNT)?.filter(filter);
 		loop {
 			entries.clear();
-			let res_is_err = walker.read(&mut entries).is_err();
+			let res_is_err = walker.read_eof(&mut entries).is_err();
 
 			if !res_is_err {
 				let mut current = arc_current.lock()?;
 				current.extend(entries.iter());
 			}
 
-			if res_is_err || entries.len() <= 1 {
+			if res_is_err || (!has_filter && entries.len() <= 1) {
 				break;
 			}
-			Self::notify(sender);
 
+			Self::notify(sender);
 			let sleep_duration =
 				if arc_background.load(Ordering::Relaxed) {
 					SLEEP_BACKGROUND

@@ -1,6 +1,8 @@
 use super::CommitId;
 use crate::sync::RepoPath;
-use crate::{error::Result, sync::commit_files::get_commit_diff};
+use crate::{
+	error::Error, error::Result, sync::commit_files::get_commit_diff,
+};
 use git2::{Commit, Oid, Repository};
 use std::{
 	cmp::Ordering,
@@ -89,6 +91,20 @@ impl<'a> LogWalker<'a> {
 	#[must_use]
 	pub fn filter(self, filter: Option<LogWalkerFilter>) -> Self {
 		Self { filter, ..self }
+	}
+
+	///
+	pub fn read_eof(
+		&mut self,
+		out: &mut Vec<CommitId>,
+	) -> Result<usize> {
+		if self.commits.peek().is_none() {
+			Err(Error::Io(std::io::Error::from(
+				std::io::ErrorKind::UnexpectedEof,
+			)))
+		} else {
+			self.read(out)
+		}
 	}
 
 	///
