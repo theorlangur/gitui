@@ -70,6 +70,23 @@ pub fn get_head_tuple(repo_path: &RepoPath) -> Result<Head> {
 }
 
 ///
+pub fn get_head_name(repo_path: &RepoPath) -> Result<String> {
+	let repo = repo(repo_path)?;
+	let href = repo.head()?;
+	if href.is_branch() {
+		let n = href.shorthand();
+		Ok(n.unwrap_or("<unknown branch>").into())
+	} else if let Some(commit) = href.target() {
+		Ok(format!(
+			"Detached at {}",
+			commit.to_string().chars().take(7).collect::<String>()
+		))
+	} else {
+		Ok("<unkown>".into())
+	}
+}
+
+///
 pub fn get_head_refname(repo: &Repository) -> Result<String> {
 	let head = repo.head()?;
 	let ref_name = bytes2string(head.name_bytes())?;

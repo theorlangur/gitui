@@ -1263,10 +1263,18 @@ impl App {
 			table_area,
 		);
 
+		let title_str = if let Ok(head) =
+			asyncgit::sync::utils::get_head_name(&self.repo.borrow())
+		{
+			format!("{}|{}", head, self.repo_path_text)
+		} else {
+			self.repo_path_text.clone()
+		};
+
 		f.render_widget(
 			Paragraph::new(Spans::from(vec![Span::styled(
 				ellipsis_trim_start(
-					&self.repo_path_text,
+					&title_str,
 					text_area.width as usize,
 				),
 				self.theme.title(true),
