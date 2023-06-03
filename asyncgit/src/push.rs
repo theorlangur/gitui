@@ -4,7 +4,7 @@ use crate::{
 		cred::BasicAuthCredential,
 		remotes::push::push_raw,
 		remotes::push::{ProgressNotification, PushType},
-		RepoPath,
+		utils, RepoPath,
 	},
 	AsyncGitNotification, RemoteProgress,
 };
@@ -42,6 +42,7 @@ pub struct AsyncPush {
 	progress: Arc<Mutex<Option<ProgressNotification>>>,
 	sender: Sender<AsyncGitNotification>,
 	repo: RepoPath,
+	external_push: Option<String>,
 }
 
 impl AsyncPush {
@@ -56,7 +57,13 @@ impl AsyncPush {
 			last_result: Arc::new(Mutex::new(None)),
 			progress: Arc::new(Mutex::new(None)),
 			sender: sender.clone(),
+			external_push: None,
 		}
+	}
+
+	///
+	pub fn set_git_push_external(&mut self, o: Option<String>) {
+		self.external_push = o;
 	}
 
 	///
@@ -93,6 +100,7 @@ impl AsyncPush {
 		let arc_progress = Arc::clone(&self.progress);
 		let sender = self.sender.clone();
 		let repo = self.repo.clone();
+		let ext_push = self.external_push.clone();
 
 		thread::spawn(move || {
 			let (progress_sender, receiver) = unbounded();
@@ -104,16 +112,28 @@ impl AsyncPush {
 				arc_progress,
 			);
 
-			let res = push_raw(
-				&repo,
-				params.remote.as_str(),
-				params.branch.as_str(),
-				params.push_type,
-				params.force,
-				params.delete,
-				params.basic_credential.clone(),
-				Some(progress_sender.clone()),
-			);
+			let res: Result<()> =
+				if let Some(mut base_push) = ext_push {
+					if params.force {
+						base_push += " --force";
+					}
+					if params.delete {
+						base_push += " --delete";
+					}
+
+					utils::exec_git_external_command(&base_push)
+				} else {
+					push_raw(
+						&repo,
+						params.remote.as_str(),
+						params.branch.as_str(),
+						params.push_type,
+						params.force,
+						params.delete,
+						params.basic_credential.clone(),
+						Some(progress_sender.clone()),
+					)
+				};
 
 			progress_sender
 				.send(ProgressNotification::Done)

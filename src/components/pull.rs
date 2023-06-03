@@ -5,6 +5,7 @@ use crate::{
 		CommandInfo, Component, DrawableComponent, EventState,
 	},
 	keys::SharedKeyConfig,
+	options::SharedOptions,
 	queue::{Action, InternalEvent, Queue},
 	strings, try_or_popup,
 	ui::{self, style::SharedTheme},
@@ -43,6 +44,7 @@ pub struct PullComponent {
 	theme: SharedTheme,
 	key_config: SharedKeyConfig,
 	input_cred: CredComponent,
+	options: SharedOptions,
 }
 
 impl PullComponent {
@@ -53,6 +55,7 @@ impl PullComponent {
 		sender: &Sender<AsyncGitNotification>,
 		theme: SharedTheme,
 		key_config: SharedKeyConfig,
+		options: SharedOptions,
 	) -> Self {
 		Self {
 			repo: repo.clone(),
@@ -68,6 +71,7 @@ impl PullComponent {
 			),
 			theme,
 			key_config,
+			options,
 		}
 	}
 
@@ -97,6 +101,13 @@ impl PullComponent {
 	) -> Result<()> {
 		self.pending = true;
 		self.progress = None;
+		self.git_fetch.set_git_fetch_external(
+			self.options
+				.borrow()
+				.git_extern_commands()
+				.fetch_base
+				.clone(),
+		);
 		self.git_fetch.request(FetchRequest {
 			remote: get_default_remote(&self.repo.borrow())?,
 			branch: self.branch.clone(),

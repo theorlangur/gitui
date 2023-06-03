@@ -3,7 +3,7 @@ use crate::{
 	sync::{
 		cred::BasicAuthCredential,
 		remotes::{fetch, push::ProgressNotification},
-		RepoPath,
+		utils, RepoPath,
 	},
 	AsyncGitNotification, RemoteProgress,
 };
@@ -35,6 +35,7 @@ pub struct AsyncPull {
 	progress: Arc<Mutex<Option<ProgressNotification>>>,
 	sender: Sender<AsyncGitNotification>,
 	repo: RepoPath,
+	external_fetch: Option<String>,
 }
 
 impl AsyncPull {
@@ -49,6 +50,7 @@ impl AsyncPull {
 			last_result: Arc::new(Mutex::new(None)),
 			progress: Arc::new(Mutex::new(None)),
 			sender: sender.clone(),
+			external_fetch: None,
 		}
 	}
 
@@ -71,6 +73,11 @@ impl AsyncPull {
 	}
 
 	///
+	pub fn set_git_fetch_external(&mut self, o: Option<String>) {
+		self.external_fetch = o;
+	}
+
+	///
 	pub fn request(&mut self, params: FetchRequest) -> Result<()> {
 		log::trace!("request");
 
@@ -86,6 +93,7 @@ impl AsyncPull {
 		let arc_progress = Arc::clone(&self.progress);
 		let sender = self.sender.clone();
 		let repo = self.repo.clone();
+		let ext_fetch = self.external_fetch.clone();
 
 		thread::spawn(move || {
 			let (progress_sender, receiver) = unbounded();
@@ -97,12 +105,17 @@ impl AsyncPull {
 				arc_progress,
 			);
 
-			let res = fetch(
-				&repo,
-				&params.branch,
-				params.basic_credential,
-				Some(progress_sender.clone()),
-			);
+			let res = if let Some(base_fetch) = ext_fetch {
+				utils::exec_git_external_command(&base_fetch)
+					.map(|_| 0)
+			} else {
+				fetch(
+					&repo,
+					&params.branch,
+					params.basic_credential,
+					Some(progress_sender.clone()),
+				)
+			};
 
 			progress_sender
 				.send(ProgressNotification::Done)

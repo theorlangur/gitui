@@ -8,6 +8,27 @@ use serde::{Deserialize, Serialize};
 
 use super::{repository::repo, RepoPath};
 
+///
+#[derive(Clone, Serialize, Deserialize)]
+pub struct GitExternCommands {
+	///base push command (git push)
+	pub push_base: Option<String>,
+	///base pull command (git pull)
+	//pub pull_base: Option<String>,
+	///base fetch command (git fetch)
+	pub fetch_base: Option<String>,
+}
+
+impl Default for GitExternCommands {
+	fn default() -> Self {
+		Self {
+			push_base: None,
+			//pull_base: None,
+			fetch_base: None,
+		}
+	}
+}
+
 // see https://git-scm.com/docs/git-config#Documentation/git-config.txt-statusshowUntrackedFiles
 /// represents the `status.showUntrackedFiles` git config state
 #[derive(

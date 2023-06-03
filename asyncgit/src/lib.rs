@@ -50,7 +50,7 @@ pub use crate::{
 	commit_files::{AsyncCommitFiles, CommitFilesParams},
 	diff::{AsyncDiff, DiffParams, DiffType},
 	error::{Error, Result},
-	fetch_job::AsyncFetchJob,
+	fetch_job::{AsyncFetchAsExternCmdJob, AsyncFetchJob},
 	progress::ProgressPercent,
 	pull::{AsyncPull, FetchRequest},
 	push::{AsyncPush, PushRequest},

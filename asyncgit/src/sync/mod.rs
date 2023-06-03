@@ -53,7 +53,7 @@ pub use commits_info::{
 	get_commit_info, get_commits_info, CommitId, CommitInfo,
 };
 pub use config::{
-	get_config_string, untracked_files_config,
+	get_config_string, untracked_files_config, GitExternCommands,
 	ShowUntrackedFilesConfig,
 };
 pub use diff::get_diff_commit;

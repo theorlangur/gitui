@@ -208,6 +208,7 @@ impl App {
 				sender,
 				theme.clone(),
 				key_config.clone(),
+				options.clone(),
 			),
 			push_tags_popup: PushTagsComponent::new(
 				&repo,
@@ -228,6 +229,7 @@ impl App {
 				sender,
 				theme.clone(),
 				key_config.clone(),
+				options.clone(),
 			),
 			fetch_popup: FetchComponent::new(
 				repo.clone(),
@@ -235,6 +237,7 @@ impl App {
 				sender,
 				theme.clone(),
 				key_config.clone(),
+				options.clone(),
 			),
 			tag_commit_popup: TagCommitComponent::new(
 				repo.clone(),

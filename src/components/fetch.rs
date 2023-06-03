@@ -4,6 +4,7 @@ use crate::{
 		CommandInfo, Component, DrawableComponent, EventState,
 	},
 	keys::SharedKeyConfig,
+	options::SharedOptions,
 	queue::{InternalEvent, NeedsUpdate, Queue},
 	strings,
 	ui::{self, style::SharedTheme},
@@ -18,7 +19,8 @@ use asyncgit::{
 		},
 		RepoPathRef,
 	},
-	AsyncFetchJob, AsyncGitNotification, ProgressPercent,
+	AsyncFetchAsExternCmdJob, AsyncFetchJob, AsyncGitNotification,
+	ProgressPercent,
 };
 use crossbeam_channel::Sender;
 use crossterm::event::Event;
@@ -30,17 +32,25 @@ use ratatui::{
 	Frame,
 };
 
+enum FetchType {
+	Internal,
+	External,
+}
+
 ///
 pub struct FetchComponent {
 	repo: RepoPathRef,
 	visible: bool,
 	async_fetch: AsyncSingleJob<AsyncFetchJob>,
+	async_fetch_extern: AsyncSingleJob<AsyncFetchAsExternCmdJob>,
 	progress: Option<ProgressPercent>,
 	pending: bool,
 	queue: Queue,
 	theme: SharedTheme,
 	key_config: SharedKeyConfig,
 	input_cred: CredComponent,
+	options: SharedOptions,
+	fetch_type: FetchType,
 }
 
 impl FetchComponent {
@@ -51,12 +61,14 @@ impl FetchComponent {
 		sender: &Sender<AsyncGitNotification>,
 		theme: SharedTheme,
 		key_config: SharedKeyConfig,
+		options: SharedOptions,
 	) -> Self {
 		Self {
 			queue: queue.clone(),
 			pending: false,
 			visible: false,
 			async_fetch: AsyncSingleJob::new(sender.clone()),
+			async_fetch_extern: AsyncSingleJob::new(sender.clone()),
 			progress: None,
 			input_cred: CredComponent::new(
 				theme.clone(),
@@ -65,6 +77,8 @@ impl FetchComponent {
 			theme,
 			key_config,
 			repo,
+			options,
+			fetch_type: FetchType::Internal,
 		}
 	}
 
@@ -93,10 +107,24 @@ impl FetchComponent {
 		self.pending = true;
 		self.progress = None;
 		self.progress = Some(ProgressPercent::empty());
-		self.async_fetch.spawn(AsyncFetchJob::new(
-			self.repo.borrow().clone(),
-			cred,
-		));
+
+		let extern_fetch = self
+			.options
+			.borrow()
+			.git_extern_commands()
+			.push_base
+			.clone();
+		if let Some(c) = extern_fetch {
+			self.fetch_type = FetchType::External;
+			self.async_fetch_extern
+				.spawn(AsyncFetchAsExternCmdJob::new(c));
+		} else {
+			self.fetch_type = FetchType::Internal;
+			self.async_fetch.spawn(AsyncFetchJob::new(
+				self.repo.borrow().clone(),
+				cred,
+			));
+		}
 	}
 
 	///
@@ -113,8 +141,16 @@ impl FetchComponent {
 
 	///
 	fn update(&mut self) {
-		self.pending = self.async_fetch.is_pending();
-		self.progress = self.async_fetch.progress();
+		self.pending = match self.fetch_type {
+			FetchType::Internal => self.async_fetch.is_pending(),
+			FetchType::External => {
+				self.async_fetch_extern.is_pending()
+			}
+		};
+		self.progress = match self.fetch_type {
+			FetchType::Internal => self.async_fetch.progress(),
+			FetchType::External => self.async_fetch_extern.progress(),
+		};
 
 		if !self.pending {
 			self.hide();

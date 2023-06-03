@@ -1,6 +1,6 @@
 use anyhow::Result;
 use asyncgit::sync::{
-	diff::DiffOptions, repo_dir, RepoPathRef,
+	diff::DiffOptions, repo_dir, GitExternCommands, RepoPathRef,
 	ShowUntrackedFilesConfig,
 };
 use ron::{
@@ -23,6 +23,7 @@ struct OptionsData {
 	pub status_show_untracked: Option<ShowUntrackedFilesConfig>,
 	pub commit_msgs: Vec<String>,
 	pub extern_cmds: Vec<String>,
+	pub git_extern_cmds: GitExternCommands,
 }
 
 const COMMIT_MSG_HISTRY_LENGTH: usize = 20;
@@ -95,6 +96,10 @@ impl Options {
 			!self.data.diff.ignore_whitespace;
 
 		self.save();
+	}
+
+	pub fn git_extern_commands(&self) -> &GitExternCommands {
+		&self.data.git_extern_cmds
 	}
 
 	pub fn extern_commands(&self) -> &Vec<String> {

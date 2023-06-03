@@ -4,6 +4,7 @@ use crate::{
 	asyncjob::{AsyncJob, RunParams},
 	error::Result,
 	sync::remotes::fetch_all,
+	sync::utils,
 	sync::{cred::BasicAuthCredential, RepoPath},
 	AsyncGitNotification, ProgressPercent,
 };
@@ -13,6 +14,32 @@ use std::sync::{Arc, Mutex};
 enum JobState {
 	Request(Option<BasicAuthCredential>),
 	Response(Result<()>),
+}
+
+///
+#[derive(Clone)]
+pub struct AsyncFetchAsExternCmdJob {
+	cmd: String,
+}
+
+impl AsyncFetchAsExternCmdJob {
+	///
+	pub fn new(cmd: String) -> Self {
+		Self { cmd }
+	}
+}
+
+impl AsyncJob for AsyncFetchAsExternCmdJob {
+	type Notification = AsyncGitNotification;
+	type Progress = ProgressPercent;
+
+	fn run(
+		&mut self,
+		_params: RunParams<Self::Notification, Self::Progress>,
+	) -> Result<Self::Notification> {
+		utils::exec_git_external_command(&self.cmd)
+			.map(|_| AsyncGitNotification::Fetch)
+	}
 }
 
 ///

@@ -13,6 +13,7 @@ use std::{
 	fs::File,
 	io::Write,
 	path::{Path, PathBuf},
+	process::Command,
 };
 
 ///
@@ -213,6 +214,28 @@ pub fn read_file(path: &Path) -> Result<String> {
 	file.read_to_end(&mut buffer)?;
 
 	Ok(String::from_utf8(buffer)?)
+}
+
+///
+pub fn exec_git_external_command(c: &str) -> Result<()> {
+	let mut i = c.split_ascii_whitespace();
+	let prog = i.next().unwrap_or("");
+	let mut cmd = Command::new(prog);
+	let cmd_res = cmd.args(i).output();
+	if let Ok(out) = cmd_res {
+		if out.status.success() {
+			Ok(())
+		} else {
+			Err(Error::Generic(format!(
+				"{}: {}",
+				out.status.to_string(),
+				std::str::from_utf8(out.stderr.as_slice())
+					.unwrap_or_default()
+			)))
+		}
+	} else {
+		Err(Error::Generic(cmd_res.err().unwrap().to_string()))
+	}
 }
 
 #[cfg(test)]

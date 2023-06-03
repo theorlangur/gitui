@@ -4,6 +4,7 @@ use crate::{
 		CommandInfo, Component, DrawableComponent, EventState,
 	},
 	keys::{key_match, SharedKeyConfig},
+	options::SharedOptions,
 	queue::{InternalEvent, Queue},
 	strings,
 	ui::{self, style::SharedTheme},
@@ -62,6 +63,7 @@ pub struct PushComponent {
 	theme: SharedTheme,
 	key_config: SharedKeyConfig,
 	input_cred: CredComponent,
+	options: SharedOptions,
 }
 
 impl PushComponent {
@@ -72,6 +74,7 @@ impl PushComponent {
 		sender: &Sender<AsyncGitNotification>,
 		theme: SharedTheme,
 		key_config: SharedKeyConfig,
+		options: SharedOptions,
 	) -> Self {
 		Self {
 			repo: repo.clone(),
@@ -89,6 +92,7 @@ impl PushComponent {
 			),
 			theme,
 			key_config,
+			options,
 		}
 	}
 
@@ -150,6 +154,13 @@ impl PushComponent {
 
 		self.pending = true;
 		self.progress = None;
+		self.git_push.set_git_push_external(
+			self.options
+				.borrow()
+				.git_extern_commands()
+				.push_base
+				.clone(),
+		);
 		self.git_push.request(PushRequest {
 			remote,
 			branch: self.branch.clone(),
