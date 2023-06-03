@@ -3,6 +3,7 @@ use asyncgit::sync::{
 	diff::DiffOptions, repo_dir, GitExternCommands, RepoPathRef,
 	ShowUntrackedFilesConfig,
 };
+use crossterm::event::KeyEvent;
 use ron::{
 	de::from_bytes,
 	ser::{to_string_pretty, PrettyConfig},
@@ -16,6 +17,9 @@ use std::{
 	rc::Rc,
 };
 
+use crate::keys::key_match;
+use crate::keys::GituiKeyEvent;
+
 #[derive(Default, Clone, Serialize, Deserialize)]
 struct OptionsData {
 	pub tab: usize,
@@ -24,6 +28,7 @@ struct OptionsData {
 	pub commit_msgs: Vec<String>,
 	pub extern_cmds: Vec<String>,
 	pub git_extern_cmds: GitExternCommands,
+	pub branch_shortcuts: Vec<(String, GituiKeyEvent)>,
 }
 
 const COMMIT_MSG_HISTRY_LENGTH: usize = 20;
@@ -132,6 +137,63 @@ impl Options {
 			self.data.extern_cmds.insert(0, cmd.to_string());
 			self.save();
 		}
+	}
+
+	pub fn assign_shortcut_for_branch(
+		&mut self,
+		branch: &str,
+		e: &KeyEvent,
+	) {
+		let shortcut = GituiKeyEvent::new(e.code, e.modifiers);
+		let existing = self
+			.data
+			.branch_shortcuts
+			.iter_mut()
+			.find(|i| i.0 == branch);
+		if let Some(i) = existing {
+			i.1 = shortcut;
+		} else {
+			self.data
+				.branch_shortcuts
+				.push((branch.to_string(), shortcut));
+		}
+		self.save();
+	}
+
+	pub fn remove_shortcut_for_branch(&mut self, branch: &str) {
+		self.data.branch_shortcuts.retain(|i| i.0 != branch);
+		self.save();
+	}
+
+	pub fn clear_all_branch_shortcuts(&mut self) {
+		self.data.branch_shortcuts.clear();
+		self.save();
+	}
+
+	pub fn find_branch_by_key_event(
+		&self,
+		e: &KeyEvent,
+	) -> Option<&str> {
+		self.data
+			.branch_shortcuts
+			.iter()
+			.find(|i| key_match(e, i.1))
+			.map(|i| i.0.as_str())
+	}
+
+	pub fn has_any_branch_shortcuts(&self) -> bool {
+		!self.data.branch_shortcuts.is_empty()
+	}
+
+	pub fn find_branch_shortcut_by_branch(
+		&self,
+		branch: &str,
+	) -> Option<&GituiKeyEvent> {
+		self.data
+			.branch_shortcuts
+			.iter()
+			.find(|i| i.0 == branch)
+			.map(|i| &i.1)
 	}
 
 	pub fn add_commit_msg(&mut self, msg: &str) {

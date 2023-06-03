@@ -104,8 +104,6 @@ pub struct KeysList {
 	pub select_tag: GituiKeyEvent,
 	pub push: GituiKeyEvent,
 	pub open_file_tree: GituiKeyEvent,
-	pub file_find: GituiKeyEvent,
-	pub branch_find: GituiKeyEvent,
 	pub force_push: GituiKeyEvent,
 	pub fetch: GituiKeyEvent,
 	pub pull: GituiKeyEvent,
@@ -132,6 +130,10 @@ pub struct KeysList {
 	pub search_prev: GituiKeyEvent,
 	pub open_suboptions: GituiKeyEvent,
 	pub filter_commits_init: GituiKeyEvent,
+	pub assign_shortcut: GituiKeyEvent,
+	pub clear_shortcut: GituiKeyEvent,
+	pub clear_all_shortcut: GituiKeyEvent,
+	pub trigger_branch_shortcut: GituiKeyEvent,
 }
 
 #[rustfmt::skip]
@@ -210,8 +212,6 @@ impl Default for KeysList {
 			pull: GituiKeyEvent::new(KeyCode::Char('f'),  KeyModifiers::empty()),
 			abort_merge: GituiKeyEvent::new(KeyCode::Char('A'),  KeyModifiers::SHIFT),
 			open_file_tree: GituiKeyEvent::new(KeyCode::Char('F'),  KeyModifiers::SHIFT),
-			file_find: GituiKeyEvent::new(KeyCode::Char('f'),  KeyModifiers::empty()),
-			branch_find: GituiKeyEvent::new(KeyCode::Char('f'),  KeyModifiers::empty()),
 			stage_unstage_item: GituiKeyEvent::new(KeyCode::Enter,  KeyModifiers::empty()),
 			tag_annotate: GituiKeyEvent::new(KeyCode::Char('a'),  KeyModifiers::CONTROL),
 			view_submodules: GituiKeyEvent::new(KeyCode::Char('S'),  KeyModifiers::SHIFT),
@@ -233,6 +233,10 @@ impl Default for KeysList {
 			search_prev: GituiKeyEvent::new(KeyCode::Char('N'),  KeyModifiers::SHIFT),
 			open_suboptions: GituiKeyEvent::new(KeyCode::Char('o'),  KeyModifiers::CONTROL),
 			filter_commits_init: GituiKeyEvent::new(KeyCode::Char('='),  KeyModifiers::empty()),
+			assign_shortcut: GituiKeyEvent::new(KeyCode::Char('='),  KeyModifiers::empty()),
+			clear_shortcut: GituiKeyEvent::new(KeyCode::Char('x'),  KeyModifiers::empty()),
+			clear_all_shortcut: GituiKeyEvent::new(KeyCode::Char('X'),  KeyModifiers::SHIFT),
+			trigger_branch_shortcut: GituiKeyEvent::new(KeyCode::Char('b'),  KeyModifiers::empty()),
 		}
 	}
 }

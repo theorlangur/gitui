@@ -444,7 +444,9 @@ pub mod commands {
 		CommandText::new(
 			format!(
 				"Find [{}]",
-				key_config.get_hint(key_config.keys.file_find)
+				key_config.get_hint(
+					key_config.keys.start_search_forward_init
+				)
 			),
 			"find file in tree",
 			CMD_GROUP_GENERAL,
@@ -454,9 +456,62 @@ pub mod commands {
 		CommandText::new(
 			format!(
 				"Find [{}]",
-				key_config.get_hint(key_config.keys.branch_find)
+				key_config.get_hint(
+					key_config.keys.start_search_forward_init
+				)
 			),
 			"find branch in list",
+			CMD_GROUP_GENERAL,
+		)
+	}
+	pub fn assign_shortcut(
+		key_config: &SharedKeyConfig,
+	) -> CommandText {
+		CommandText::new(
+			format!(
+				"Assign Shortcut [{}]",
+				key_config.get_hint(key_config.keys.assign_shortcut)
+			),
+			"assign shortcut for quick branch checkout",
+			CMD_GROUP_GENERAL,
+		)
+	}
+	pub fn clear_shortcut(
+		key_config: &SharedKeyConfig,
+	) -> CommandText {
+		CommandText::new(
+			format!(
+				"Clear Shortcut [{}]",
+				key_config.get_hint(key_config.keys.clear_shortcut)
+			),
+			"clear shortcut for branch",
+			CMD_GROUP_GENERAL,
+		)
+	}
+	pub fn clear_all_shortcuts(
+		key_config: &SharedKeyConfig,
+	) -> CommandText {
+		CommandText::new(
+			format!(
+				"Clear All Shortcuts [{}]",
+				key_config
+					.get_hint(key_config.keys.clear_all_shortcut)
+			),
+			"clear all shortcuts",
+			CMD_GROUP_GENERAL,
+		)
+	}
+	pub fn checkout_branch_by_shortcut(
+		key_config: &SharedKeyConfig,
+	) -> CommandText {
+		CommandText::new(
+			format!(
+				"Checkout By Shortcut [{}]",
+				key_config.get_hint(
+					key_config.keys.trigger_branch_shortcut
+				)
+			),
+			"checkout branch with a shortcut",
 			CMD_GROUP_GENERAL,
 		)
 	}

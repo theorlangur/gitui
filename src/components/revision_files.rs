@@ -514,7 +514,10 @@ impl Component for RevisionFilesComponent {
 					self.focus(false);
 					return Ok(EventState::Consumed);
 				}
-			} else if key_match(key, self.key_config.keys.file_find) {
+			} else if key_match(
+				key,
+				self.key_config.keys.start_search_forward_init,
+			) {
 				if is_tree_focused {
 					self.open_finder();
 					return Ok(EventState::Consumed);

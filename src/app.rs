@@ -262,6 +262,7 @@ impl App {
 				queue.clone(),
 				theme.clone(),
 				key_config.clone(),
+				options.clone(),
 			),
 			tags_popup: TagListComponent::new(
 				repo.clone(),

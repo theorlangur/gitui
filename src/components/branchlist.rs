@@ -6,6 +6,7 @@ use super::{
 use crate::{
 	components::ScrollType,
 	keys::{key_match, SharedKeyConfig},
+	options::SharedOptions,
 	queue::{
 		Action, InternalEvent, NeedsUpdate, Queue, StackablePopupOpen,
 	},
@@ -39,6 +40,12 @@ use std::{cell::Cell, convert::TryInto};
 use ui::style::SharedTheme;
 use unicode_truncate::UnicodeTruncateStr;
 
+enum ShortcutState {
+	Idle,
+	AssignNew,
+	Trigger,
+}
+
 ///
 pub struct BranchListComponent {
 	repo: RepoPathRef,
@@ -52,6 +59,8 @@ pub struct BranchListComponent {
 	queue: Queue,
 	theme: SharedTheme,
 	key_config: SharedKeyConfig,
+	options: SharedOptions,
+	shortcut_state: ShortcutState,
 }
 
 impl DrawableComponent for BranchListComponent {
@@ -212,6 +221,34 @@ impl Component for BranchListComponent {
 				true,
 				true,
 			));
+
+			out.push(CommandInfo::new(
+				strings::commands::assign_shortcut(&self.key_config),
+				true,
+				true,
+			));
+
+			out.push(CommandInfo::new(
+				strings::commands::clear_shortcut(&self.key_config),
+				true,
+				true,
+			));
+
+			out.push(CommandInfo::new(
+				strings::commands::clear_all_shortcuts(
+					&self.key_config,
+				),
+				true,
+				true,
+			));
+
+			out.push(CommandInfo::new(
+				strings::commands::checkout_branch_by_shortcut(
+					&self.key_config,
+				),
+				true,
+				true,
+			));
 		}
 		visibility_blocking(self)
 	}
@@ -224,6 +261,43 @@ impl Component for BranchListComponent {
 		}
 
 		if let Event::Key(e) = ev {
+			match self.shortcut_state {
+				ShortcutState::AssignNew => {
+					self.shortcut_state = ShortcutState::Idle;
+					if self.valid_selection() {
+						self.options
+							.borrow_mut()
+							.assign_shortcut_for_branch(
+								&self.branches
+									[self.selection as usize]
+									.name,
+								e,
+							);
+					}
+					return Ok(EventState::Consumed);
+				}
+				ShortcutState::Trigger => {
+					self.shortcut_state = ShortcutState::Idle;
+					let opts = self.options.borrow();
+					let shortcut = opts.find_branch_by_key_event(e);
+					if let Some(branch) = shortcut {
+						let b_index = self
+							.branches
+							.iter()
+							.enumerate()
+							.find(|i| i.1.name == branch)
+							.map(|i| i.0);
+						drop(opts);
+						if let Some(b_index) = b_index {
+							self.selection = b_index as u16;
+							self.switch_to_selected_branch()?;
+						}
+					}
+					return Ok(EventState::Consumed);
+				}
+				_ => {}
+			}
+
 			if self.move_event(e)?.is_consumed() {
 				return Ok(EventState::Consumed);
 			}
@@ -292,7 +366,38 @@ impl Component for BranchListComponent {
 			) {
 				//do not consume if its the more key
 				return Ok(EventState::NotConsumed);
-			} else if key_match(e, self.key_config.keys.branch_find) {
+			} else if key_match(
+				e,
+				self.key_config.keys.assign_shortcut,
+			) && self.valid_selection()
+			{
+				//start shortcut assignment
+				self.shortcut_state = ShortcutState::AssignNew;
+			} else if key_match(
+				e,
+				self.key_config.keys.clear_shortcut,
+			) && self.valid_selection()
+			{
+				self.options.borrow_mut().remove_shortcut_for_branch(
+					&self.branches[self.selection as usize].name,
+				);
+			} else if key_match(
+				e,
+				self.key_config.keys.clear_all_shortcut,
+			) && self.valid_selection()
+			{
+				self.options
+					.borrow_mut()
+					.clear_all_branch_shortcuts();
+			} else if key_match(
+				e,
+				self.key_config.keys.trigger_branch_shortcut,
+			) {
+				self.shortcut_state = ShortcutState::Trigger;
+			} else if key_match(
+				e,
+				self.key_config.keys.start_search_forward_init,
+			) {
 				let branches = self
 					.branches
 					.iter()
@@ -327,6 +432,7 @@ impl BranchListComponent {
 		queue: Queue,
 		theme: SharedTheme,
 		key_config: SharedKeyConfig,
+		options: SharedOptions,
 	) -> Self {
 		Self {
 			branches: Vec::new(),
@@ -340,6 +446,8 @@ impl BranchListComponent {
 			key_config,
 			current_height: Cell::new(0),
 			repo,
+			shortcut_state: ShortcutState::Idle,
+			options,
 		}
 	}
 
@@ -405,6 +513,11 @@ impl BranchListComponent {
 		}
 	}
 
+	fn update_auto_shortcuts(&mut self) {
+		//self.auto_shortcuts.clear();
+		//self.auto_shortcuts.reserve(self.branches.len());
+	}
+
 	/// fetch list of branches
 	pub fn update_branches(&mut self) -> Result<()> {
 		if self.is_visible() {
@@ -419,6 +532,7 @@ impl BranchListComponent {
 					.map(|idx| self.branches.remove(idx));
 			}
 			self.set_selection(self.selection)?;
+			self.update_auto_shortcuts();
 		}
 		Ok(())
 	}
@@ -577,9 +691,14 @@ impl BranchListComponent {
 		const THREE_DOTS_LENGTH: usize = THREE_DOTS.len(); // "..."
 		const COMMIT_HASH_LENGTH: usize = 8;
 		const IS_HEAD_STAR_LENGTH: usize = 3; // "*  "
+		const SHORTCUT_WIDTH: usize = 4; // "*  "
+
+		let opts = self.options.borrow();
+		let has_shortcuts = opts.has_any_branch_shortcuts();
 
 		let branch_name_length: usize =
-			width_available as usize * 40 / 100;
+			(width_available as usize * 40 / 100)
+				- (has_shortcuts as usize * SHORTCUT_WIDTH);
 		// commit message takes up the remaining width
 		let commit_message_length: usize = (width_available as usize)
 			.saturating_sub(COMMIT_HASH_LENGTH)
@@ -604,6 +723,14 @@ impl BranchListComponent {
 				);
 				commit_message += THREE_DOTS;
 			}
+
+			let shortcut = opts
+				.find_branch_shortcut_by_branch(&displaybranch.name);
+			let mut shortcut = if let Some(s) = shortcut {
+				self.key_config.get_hint(*s)
+			} else {
+				String::from(" ")
+			};
 
 			let mut branch_name = displaybranch.name.clone();
 			if branch_name.len()
@@ -661,12 +788,31 @@ impl BranchListComponent {
 				theme.branch(selected, is_head),
 			);
 
-			txt.push(Spans::from(vec![
-				span_prefix,
-				span_name,
-				span_hash,
-				span_msg,
-			]));
+			if has_shortcuts {
+				shortcut.extend(
+					[' '].iter().cycle().take(
+						SHORTCUT_WIDTH - shortcut.chars().count(),
+					),
+				);
+				let span_shortcut = Span::styled(
+					shortcut,
+					theme.branch(selected, is_head),
+				);
+				txt.push(Spans::from(vec![
+					span_prefix,
+					span_shortcut,
+					span_name,
+					span_hash,
+					span_msg,
+				]));
+			} else {
+				txt.push(Spans::from(vec![
+					span_prefix,
+					span_name,
+					span_hash,
+					span_msg,
+				]));
+			}
 		}
 
 		Text::from(txt)
