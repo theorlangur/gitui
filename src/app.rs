@@ -1,3 +1,4 @@
+use crate::async_jobs::JobSender;
 use crate::{
 	accessors,
 	cmdbar::CommandBar,
@@ -69,6 +70,7 @@ enum ExternalEditorRequest {
 pub struct App {
 	repo: RepoPathRef,
 	do_quit: QuitState,
+	//async_job_sender: JobSender,
 	help: HelpComponent,
 	msg: MsgComponent,
 	reset: ConfirmComponent,
@@ -92,7 +94,8 @@ pub struct App {
 	select_branch_popup: BranchListComponent,
 	options_popup: OptionsPopupComponent,
 	copy_clipboard_popup: CopyPopupComponent,
-	external_command_popup: ExternalCommandPopupComponent,
+	///
+	pub external_command_popup: ExternalCommandPopupComponent,
 	submodule_popup: SubmodulesListComponent,
 	tags_popup: TagListComponent,
 	reset_popup: ResetPopupComponent,
@@ -127,6 +130,7 @@ impl App {
 		input: Input,
 		theme: Theme,
 		key_config: KeyConfig,
+		async_job_sender: JobSender,
 	) -> Result<Self> {
 		log::trace!("open repo at: {:?}", &repo);
 
@@ -288,6 +292,7 @@ impl App {
 					key_config.clone(),
 					queue.clone(),
 					options.clone(),
+					async_job_sender.clone(),
 				),
 			submodule_popup: SubmodulesListComponent::new(
 				repo.clone(),
@@ -361,6 +366,7 @@ impl App {
 			repo,
 			repo_path_text,
 			popup_stack: PopupStack::default(),
+			//async_job_sender,
 		};
 
 		app.set_tab(tab)?;
@@ -600,6 +606,7 @@ impl App {
 			|| self.file_revlog_popup.any_work_pending()
 			|| self.inspect_commit_popup.any_work_pending()
 			|| self.compare_commits_popup.any_work_pending()
+			|| self.external_command_popup.any_work_pending()
 			|| self.input.is_state_changing()
 			|| self.push_popup.any_work_pending()
 			|| self.push_tags_popup.any_work_pending()

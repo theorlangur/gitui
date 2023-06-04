@@ -29,6 +29,7 @@
 
 mod app;
 mod args;
+mod async_jobs;
 mod bug_report;
 mod clipboard;
 mod cmdbar;
@@ -106,6 +107,8 @@ pub enum SyntaxHighlightProgress {
 pub enum AsyncAppNotification {
 	///
 	SyntaxHighlighting(SyntaxHighlightProgress),
+	///
+	Notify,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -206,6 +209,8 @@ fn run_app(
 	};
 
 	let spinner_ticker = tick(SPINNER_INTERVAL);
+	let (dyn_jobs_thread, dyn_jobs_send, dyn_jobs_feedback) =
+		async_jobs::AsyncJobList::new(tx_app.clone());
 
 	let mut app = App::new(
 		RefCell::new(repo),
@@ -214,6 +219,7 @@ fn run_app(
 		input.clone(),
 		theme,
 		key_config,
+		dyn_jobs_send.clone(),
 	)?;
 
 	let mut spinner = Spinner::default();
@@ -237,6 +243,12 @@ fn run_app(
 		};
 
 		{
+			while let Ok(mut job_feedback) = dyn_jobs_feedback
+				.recv_timeout(Duration::from_millis(0))
+			{
+				job_feedback.as_mut().visit(&mut app);
+			}
+
 			if matches!(event, QueueEvent::SpinnerUpdate) {
 				spinner.update();
 				spinner.draw(terminal)?;
@@ -282,6 +294,10 @@ fn run_app(
 			}
 		}
 	}
+	dyn_jobs_send
+		.send(Box::new(async_jobs::AsyncStopJob {})
+			as async_jobs::BoxJob)?;
+	if let Err(_) = dyn_jobs_thread.join() {}
 
 	Ok(app.quit_state())
 }

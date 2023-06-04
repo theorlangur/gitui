@@ -22,8 +22,72 @@ use ratatui::{
 	widgets::{Block, Borders, Clear /*, Paragraph*/},
 	Frame,
 };
+
+use crate::async_jobs::{
+	AsyncDynJob, AsyncJobFeedback, BoxFeedback, JobFeedbackSender,
+	JobSender,
+};
 //use scopeguard::defer;
 //use std::io;
+
+type CmdResult = Result<std::process::Output, std::io::Error>;
+
+struct AsyncJobExternCmd {
+	cmd: String,
+}
+
+impl AsyncJobExternCmd {
+	pub fn new(cmd: String) -> Self {
+		Self { cmd }
+	}
+
+	#[cfg(unix)]
+	fn do_exec_command(
+		&self,
+		cmd: &str,
+	) -> Result<std::process::Output, std::io::Error> {
+		Command::new("sh").args(["-c", cmd]).output()
+	}
+
+	#[cfg(windows)]
+	fn do_exec_command(
+		&self,
+		cmd: &str,
+	) -> Result<std::process::Output, std::io::Error> {
+		Command::new("cmd.exe").args(["/C", cmd]).output()
+	}
+}
+
+impl AsyncDynJob for AsyncJobExternCmd {
+	fn run(
+		&mut self,
+		_sender: JobFeedbackSender,
+	) -> Option<BoxFeedback> {
+		Some(Box::new(AsyncJobExternCmdFeedback::new(
+			self.do_exec_command(&self.cmd),
+		)))
+	}
+
+	fn should_stop(&self) -> bool {
+		false
+	}
+}
+
+struct AsyncJobExternCmdFeedback {
+	res: CmdResult,
+}
+
+impl AsyncJobExternCmdFeedback {
+	pub fn new(res: CmdResult) -> Self {
+		Self { res }
+	}
+}
+
+impl AsyncJobFeedback for AsyncJobExternCmdFeedback {
+	fn visit(&mut self, app: &mut crate::app::App) {
+		app.external_command_popup.finish_pending_command(&self.res);
+	}
+}
 
 #[derive(PartialEq)]
 enum Focused {
@@ -38,10 +102,13 @@ pub struct ExternalCommandPopupComponent {
 	theme: SharedTheme,
 	queue: Queue,
 	options: SharedOptions,
+	async_job_sender: JobSender,
 
 	selected_idx: usize,
 	visible_idx: RefCell<usize>,
 	focused: Focused,
+
+	cmd_pending: bool,
 }
 
 impl ExternalCommandPopupComponent {
@@ -51,6 +118,7 @@ impl ExternalCommandPopupComponent {
 		key_config: SharedKeyConfig,
 		queue: Queue,
 		options: SharedOptions,
+		async_job_sender: JobSender,
 	) -> Self {
 		Self {
 			visible: false,
@@ -70,39 +138,21 @@ impl ExternalCommandPopupComponent {
 			selected_idx: 0,
 			visible_idx: 0.into(),
 			focused: Focused::Input,
+			cmd_pending: false,
+			async_job_sender,
 		}
 	}
 
-	fn exec_command(
-		&self,
-		cmd: &str,
-	) -> Result<std::process::Output, std::io::Error> {
-		/*io::stdout().execute(LeaveAlternateScreen)?;
-		defer! {
-			io::stdout().execute(EnterAlternateScreen).expect("reset terminal");
-		}*/
-		self.options.borrow_mut().add_extern_command(cmd);
-		self.do_exec_command(cmd)
+	pub fn any_work_pending(&self) -> bool {
+		self.cmd_pending
 	}
 
-	#[cfg(unix)]
-	fn do_exec_command(
-		&self,
-		cmd: &str,
-	) -> Result<std::process::Output, std::io::Error> {
-		Command::new("sh").args(["-c", cmd]).output()
+	pub fn finish_pending_command(&mut self, res: &CmdResult) {
+		self.cmd_pending = false;
+		self.post_run_command_ui(res);
 	}
 
-	#[cfg(windows)]
-	fn do_exec_command(
-		&self,
-		cmd: &str,
-	) -> Result<std::process::Output, std::io::Error> {
-		Command::new("cmd.exe").args(["/C", cmd]).output()
-	}
-
-	fn run_command_ui(&self, cmd: &str) {
-		let _res = self.exec_command(cmd);
+	fn post_run_command_ui(&self, _res: &CmdResult) {
 		if let Err(e) = _res {
 			self.queue.push(
 				crate::queue::InternalEvent::ShowErrorMsg(format!(
@@ -111,7 +161,7 @@ impl ExternalCommandPopupComponent {
 				)),
 			);
 		} else {
-			let o = _res.unwrap();
+			let o = _res.as_ref().unwrap();
 			if !o.stderr.is_empty() && !o.status.success() {
 				self.queue.push(
 					crate::queue::InternalEvent::ShowErrorMsg(
@@ -138,6 +188,20 @@ impl ExternalCommandPopupComponent {
 					),
 				);
 			}
+		}
+	}
+
+	fn run_command_ui(&mut self, cmd: String) {
+		self.cmd_pending = true;
+		self.options.borrow_mut().add_extern_command(cmd.as_str());
+		if let Err(_) = self
+			.async_job_sender
+			.send(Box::new(AsyncJobExternCmd::new(cmd)))
+		{
+			self.cmd_pending = false;
+			self.post_run_command_ui(&Err(std::io::Error::from(
+				std::io::ErrorKind::Other,
+			)));
 		}
 	}
 }
@@ -326,9 +390,11 @@ impl Component for ExternalCommandPopupComponent {
 							self.options.borrow().extern_commands()
 								[self.selected_idx]
 								.clone();
-						self.run_command_ui(&cmdstr);
+						self.run_command_ui(cmdstr.to_string());
 					} else {
-						self.run_command_ui(&self.cmdline.get_text());
+						self.run_command_ui(
+							self.cmdline.get_text().to_string(),
+						);
 					}
 					self.hide();
 					true
@@ -387,7 +453,7 @@ impl Component for ExternalCommandPopupComponent {
 							let cmdstr =
 								extern_commands[cmd_idx].clone();
 							drop(opts);
-							self.run_command_ui(&cmdstr);
+							self.run_command_ui(cmdstr.to_string());
 							self.hide();
 							true
 						} else {
