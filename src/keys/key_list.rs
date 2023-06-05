@@ -34,6 +34,12 @@ impl From<&GituiKeyEvent> for KeyEvent {
 	}
 }
 
+impl From<&KeyEvent> for GituiKeyEvent {
+	fn from(other: &KeyEvent) -> Self {
+		Self::new(other.code, other.modifiers)
+	}
+}
+
 #[derive(Clone, Patch)]
 #[patch_derive(Deserialize)]
 pub struct KeysList {

@@ -20,13 +20,15 @@ use std::{
 use crate::keys::key_match;
 use crate::keys::GituiKeyEvent;
 
+type ExternCmdList = Vec<(String, Option<GituiKeyEvent>)>;
+
 #[derive(Default, Clone, Serialize, Deserialize)]
 struct OptionsData {
 	pub tab: usize,
 	pub diff: DiffOptions,
 	pub status_show_untracked: Option<ShowUntrackedFilesConfig>,
 	pub commit_msgs: Vec<String>,
-	pub extern_cmds: Vec<String>,
+	pub extern_cmds: ExternCmdList,
 	pub git_extern_cmds: GitExternCommands,
 	pub branch_shortcuts: Vec<(String, GituiKeyEvent)>,
 }
@@ -107,7 +109,7 @@ impl Options {
 		&self.data.git_extern_cmds
 	}
 
-	pub fn extern_commands(&self) -> &Vec<String> {
+	pub fn extern_commands(&self) -> &ExternCmdList {
 		&self.data.extern_cmds
 	}
 
@@ -131,12 +133,37 @@ impl Options {
 			.extern_cmds
 			.iter()
 			.enumerate()
-			.find(|i| i.1 == cmd);
+			.find(|i| i.1 .0 == cmd);
 		if existing.is_none() {
 			//add new
-			self.data.extern_cmds.insert(0, cmd.to_string());
+			self.data.extern_cmds.insert(0, (cmd.to_string(), None));
 			self.save();
 		}
+	}
+
+	pub fn assign_shortcut_for_extern_command(
+		&mut self,
+		idx: usize,
+		shortcut: Option<GituiKeyEvent>,
+	) {
+		self.data.extern_cmds[idx].1 = shortcut;
+		self.save();
+	}
+
+	pub fn clear_all_shortcuts_for_extern_commands(&mut self) {
+		self.data.extern_cmds.iter_mut().for_each(|i| i.1 = None);
+		self.save();
+	}
+
+	pub fn find_extern_cmd_for_shortcut(
+		&self,
+		e: GituiKeyEvent,
+	) -> Option<String> {
+		self.data
+			.extern_cmds
+			.iter()
+			.find(|i| i.1 == Some(e))
+			.map(|i| i.0.clone())
 	}
 
 	pub fn assign_shortcut_for_branch(

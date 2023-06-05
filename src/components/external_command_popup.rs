@@ -7,14 +7,14 @@ use super::{
 };
 use crate::{
 	//components::utils::string_width_align,
-	keys::{key_match, GituiKeyEvent, SharedKeyConfig},
+	keys::{key_match, SharedKeyConfig},
 	options::SharedOptions,
 	queue::Queue,
 	strings::{self},
 	ui::{self, style::SharedTheme},
 };
 use anyhow::Result;
-use crossterm::event::{Event, KeyCode, KeyModifiers};
+use crossterm::event::Event;
 use ratatui::{
 	backend::Backend,
 	layout::{/*Alignment,*/ Constraint, Layout, Margin, Rect},
@@ -95,6 +95,12 @@ enum Focused {
 	List,
 }
 
+#[derive(PartialEq)]
+enum ShortcutState {
+	Idle,
+	Assign,
+}
+
 pub struct ExternalCommandPopupComponent {
 	visible: bool,
 	cmdline: TextInputComponent,
@@ -109,6 +115,7 @@ pub struct ExternalCommandPopupComponent {
 	focused: Focused,
 
 	cmd_pending: bool,
+	shortcut_state: ShortcutState,
 }
 
 impl ExternalCommandPopupComponent {
@@ -140,6 +147,7 @@ impl ExternalCommandPopupComponent {
 			focused: Focused::Input,
 			cmd_pending: false,
 			async_job_sender,
+			shortcut_state: ShortcutState::Idle,
 		}
 	}
 
@@ -264,10 +272,10 @@ impl DrawableComponent for ExternalCommandPopupComponent {
 				.skip(vis_idx)
 				.take(xh)
 				.map(|i| {
-					let s = if i.1.len() <= w.into() {
-						i.1
+					let s = if i.1 .0.len() <= w.into() {
+						&i.1 .0
 					} else {
-						&i.1[0..w.into()]
+						&i.1 .0[0..w.into()]
 					};
 					let selected = if self.focused == Focused::List
 						&& i.0 == self.selected_idx
@@ -278,21 +286,13 @@ impl DrawableComponent for ExternalCommandPopupComponent {
 					};
 
 					const KEY_WIDTH: usize = 4;
-					let mut relative_visible_idx = i.0 - vis_idx;
-					if relative_visible_idx < 10 {
-						relative_visible_idx =
-							(relative_visible_idx + 1) % 10;
-						let key = GituiKeyEvent::new(
-							KeyCode::Char(
-								('0' as u8
-									+ relative_visible_idx as u8) as char,
-							),
-							KeyModifiers::ALT,
-						);
+					if let Some(shortcut) = i.1 .1 {
 						Spans::from(vec![
 							Span::styled(
 								string_width_align(
-									&self.key_config.get_hint(key),
+									&self
+										.key_config
+										.get_hint(shortcut),
 									KEY_WIDTH,
 								),
 								self.theme.text(true, selected),
@@ -370,8 +370,10 @@ impl Component for ExternalCommandPopupComponent {
 		event: &crossterm::event::Event,
 	) -> Result<EventState> {
 		if self.is_visible() {
+			let opts = self.options.borrow();
 			let consumed = if let Event::Key(key) = &event {
 				if key_match(key, self.key_config.keys.exit_popup) {
+					drop(opts);
 					self.hide();
 					true
 				} else if key_match(
@@ -386,12 +388,13 @@ impl Component for ExternalCommandPopupComponent {
 					true
 				} else if key_match(key, self.key_config.keys.enter) {
 					if self.focused == Focused::List {
-						let cmdstr =
-							self.options.borrow().extern_commands()
-								[self.selected_idx]
-								.clone();
-						self.run_command_ui(cmdstr.to_string());
+						let cmdstr = opts.extern_commands()
+							[self.selected_idx]
+							.clone();
+						drop(opts);
+						self.run_command_ui(cmdstr.0.to_string());
 					} else {
+						drop(opts);
 						self.run_command_ui(
 							self.cmdline.get_text().to_string(),
 						);
@@ -399,20 +402,23 @@ impl Component for ExternalCommandPopupComponent {
 					self.hide();
 					true
 				} else if self.focused == Focused::List
-					&& !self
-						.options
-						.borrow()
-						.extern_commands()
-						.is_empty()
+					&& !opts.extern_commands().is_empty()
 				{
-					if key_match(key, self.key_config.keys.move_down)
-					{
+					if self.shortcut_state == ShortcutState::Assign {
+						drop(opts);
+						let mut opts = self.options.borrow_mut();
+						self.shortcut_state = ShortcutState::Idle;
+						opts.assign_shortcut_for_extern_command(
+							self.selected_idx,
+							Some(key.into()),
+						);
+						true
+					} else if key_match(
+						key,
+						self.key_config.keys.move_down,
+					) {
 						if self.selected_idx
-							< self
-								.options
-								.borrow()
-								.extern_commands()
-								.len() - 1
+							< opts.extern_commands().len() - 1
 						{
 							self.selected_idx += 1;
 						}
@@ -429,36 +435,47 @@ impl Component for ExternalCommandPopupComponent {
 						key,
 						self.key_config.keys.delete_generic,
 					) {
+						drop(opts);
 						self.selected_idx = self
 							.options
 							.borrow_mut()
 							.remove_extern_command(self.selected_idx);
 						true
-					} else {
-						false
-					}
-				} else if let KeyCode::Char(c) = key.code {
-					if c >= '0'
-						&& c <= '9' && key.modifiers
-						== KeyModifiers::ALT
+					} else if key_match(
+						key,
+						self.key_config.keys.assign_shortcut,
+					) {
+						self.shortcut_state = ShortcutState::Assign;
+						true
+					} else if key_match(
+						key,
+						self.key_config.keys.clear_shortcut,
+					) {
+						drop(opts);
+						self.options
+							.borrow_mut()
+							.assign_shortcut_for_extern_command(
+								self.selected_idx,
+								None,
+							);
+						true
+					} else if key_match(
+						key,
+						self.key_config.keys.clear_all_shortcut,
+					) {
+						drop(opts);
+						self.options
+							.borrow_mut()
+							.clear_all_shortcuts_for_extern_commands(
+							);
+						true
+					} else if let Some(cmd) =
+						opts.find_extern_cmd_for_shortcut(key.into())
 					{
-						//run command
-						let visible_offset =
-							((c as u8 - '0' as u8) + 9) % 10;
-						let opts = self.options.borrow();
-						let extern_commands = opts.extern_commands();
-						let cmd_idx = *self.visible_idx.borrow()
-							+ visible_offset as usize;
-						if cmd_idx < extern_commands.len() {
-							let cmdstr =
-								extern_commands[cmd_idx].clone();
-							drop(opts);
-							self.run_command_ui(cmdstr.to_string());
-							self.hide();
-							true
-						} else {
-							false
-						}
+						drop(opts);
+						self.run_command_ui(cmd);
+						self.hide();
+						true
 					} else {
 						false
 					}
@@ -489,7 +506,12 @@ impl Component for ExternalCommandPopupComponent {
 
 	fn show(&mut self) -> Result<()> {
 		self.visible = true;
-		self.focused = Focused::Input;
+		self.focused =
+			if self.options.borrow().extern_commands().is_empty() {
+				Focused::Input
+			} else {
+				Focused::List
+			};
 		self.cmdline.clear();
 		self.cmdline.show()?;
 
