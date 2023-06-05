@@ -11,15 +11,15 @@ use crate::{
 	options::SharedOptions,
 	queue::Queue,
 	strings::{self},
-	ui::{self, style::SharedTheme},
+	ui::{self, show_message_in_center, style::SharedTheme},
 };
 use anyhow::Result;
-use crossterm::event::Event;
+use crossterm::event::{Event, KeyCode};
 use ratatui::{
 	backend::Backend,
 	layout::{/*Alignment,*/ Constraint, Layout, Margin, Rect},
 	text::{Span, Spans},
-	widgets::{Block, Borders, Clear /*, Paragraph*/},
+	widgets::{Block, Borders, Clear},
 	Frame,
 };
 
@@ -223,6 +223,8 @@ impl DrawableComponent for ExternalCommandPopupComponent {
 		if self.is_visible() {
 			let sz: (u16, u16) =
 				((area.width as f32 * 0.75) as u16, 10);
+			let msg_rect =
+				ui::centered_rect_absolute(sz.0 / 2, 3, area);
 			let area = ui::centered_rect_absolute(sz.0, sz.1, area);
 
 			let v_blocks = Layout::default()
@@ -327,6 +329,15 @@ impl DrawableComponent for ExternalCommandPopupComponent {
 					.borders(Borders::TOP),
 				prev_command_spans,
 			);
+
+			if self.shortcut_state == ShortcutState::Assign {
+				show_message_in_center(
+					f,
+					&self.theme,
+					msg_rect,
+					"Hit a key to assign a shortcut...",
+				);
+			}
 		}
 
 		Ok(())
@@ -360,6 +371,23 @@ impl Component for ExternalCommandPopupComponent {
 				true,
 				self.focused == Focused::List,
 			));
+			out.push(CommandInfo::new(
+				strings::commands::assign_shortcut(&self.key_config),
+				true,
+				self.focused == Focused::List,
+			));
+			out.push(CommandInfo::new(
+				strings::commands::clear_shortcut(&self.key_config),
+				true,
+				self.focused == Focused::List,
+			));
+			out.push(CommandInfo::new(
+				strings::commands::clear_all_shortcuts(
+					&self.key_config,
+				),
+				true,
+				self.focused == Focused::List,
+			));
 		}
 
 		visibility_blocking(self)
@@ -372,7 +400,9 @@ impl Component for ExternalCommandPopupComponent {
 		if self.is_visible() {
 			let opts = self.options.borrow();
 			let consumed = if let Event::Key(key) = &event {
-				if key_match(key, self.key_config.keys.exit_popup) {
+				if self.shortcut_state != ShortcutState::Assign
+					&& key_match(key, self.key_config.keys.exit_popup)
+				{
 					drop(opts);
 					self.hide();
 					true
@@ -408,10 +438,12 @@ impl Component for ExternalCommandPopupComponent {
 						drop(opts);
 						let mut opts = self.options.borrow_mut();
 						self.shortcut_state = ShortcutState::Idle;
-						opts.assign_shortcut_for_extern_command(
-							self.selected_idx,
-							Some(key.into()),
-						);
+						if key.code != KeyCode::Esc {
+							opts.assign_shortcut_for_extern_command(
+								self.selected_idx,
+								Some(key.into()),
+							);
+						}
 						true
 					} else if key_match(
 						key,
@@ -506,6 +538,7 @@ impl Component for ExternalCommandPopupComponent {
 
 	fn show(&mut self) -> Result<()> {
 		self.visible = true;
+		self.shortcut_state = ShortcutState::Idle;
 		self.focused =
 			if self.options.borrow().extern_commands().is_empty() {
 				Focused::Input

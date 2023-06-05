@@ -6,7 +6,13 @@ pub mod style;
 mod syntax_text;
 
 use filetreelist::MoveSelection;
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::{
+	backend::Backend,
+	layout::{Constraint, Direction, Layout, Rect},
+	text::Span,
+	widgets::{Block, Borders, Clear, Paragraph},
+	Frame,
+};
 pub use scrollbar::{draw_scrollbar, Orientation};
 pub use scrolllist::{draw_list, draw_list_block};
 pub use stateful_paragraph::{
@@ -15,6 +21,8 @@ pub use stateful_paragraph::{
 pub use syntax_text::{AsyncSyntaxJob, SyntaxText};
 
 use crate::keys::{key_match, SharedKeyConfig};
+
+use self::style::Theme;
 
 /// return the scroll position (line) necessary to have the `selection` in view if it is not already
 pub const fn calc_scroll_top(
@@ -151,6 +159,22 @@ pub fn common_nav(
 	} else {
 		None
 	}
+}
+
+pub fn show_message_in_center<B: Backend>(
+	f: &mut Frame<B>,
+	theme: &Theme,
+	area: Rect,
+	msg: &str,
+) {
+	let assign_shortcut_msg =
+		Paragraph::new(Span::styled(msg, theme.title(true))).block(
+			Block::default()
+				.borders(Borders::ALL)
+				.border_style(theme.block(true)),
+		);
+	f.render_widget(Clear, area);
+	f.render_widget(assign_shortcut_msg, area);
 }
 
 #[cfg(test)]

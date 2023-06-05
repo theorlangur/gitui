@@ -11,7 +11,7 @@ use crate::{
 		Action, InternalEvent, NeedsUpdate, Queue, StackablePopupOpen,
 	},
 	strings, try_or_popup,
-	ui::{self, Size},
+	ui::{self, show_message_in_center, Size},
 };
 use anyhow::Result;
 use asyncgit::{
@@ -26,7 +26,7 @@ use asyncgit::{
 	},
 	AsyncGitNotification,
 };
-use crossterm::event::{Event, KeyEvent};
+use crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::{
 	backend::Backend,
 	layout::{
@@ -40,6 +40,7 @@ use std::{cell::Cell, convert::TryInto};
 use ui::style::SharedTheme;
 use unicode_truncate::UnicodeTruncateStr;
 
+#[derive(PartialEq)]
 enum ShortcutState {
 	Idle,
 	AssignNew,
@@ -72,6 +73,12 @@ impl DrawableComponent for BranchListComponent {
 		if self.is_visible() {
 			const PERCENT_SIZE: Size = Size::new(80, 50);
 			const MIN_SIZE: Size = Size::new(60, 20);
+
+			let msg_rect = ui::centered_rect_absolute(
+				PERCENT_SIZE.width / 2,
+				3,
+				rect,
+			);
 
 			let area = ui::centered_rect(
 				PERCENT_SIZE.width,
@@ -107,6 +114,15 @@ impl DrawableComponent for BranchListComponent {
 
 			self.draw_tabs(f, chunks[0]);
 			self.draw_list(f, chunks[1])?;
+
+			if self.shortcut_state == ShortcutState::AssignNew {
+				show_message_in_center(
+					f,
+					&self.theme,
+					msg_rect,
+					"Hit a key to assign a shortcut...",
+				);
+			}
 		}
 
 		Ok(())
@@ -264,7 +280,9 @@ impl Component for BranchListComponent {
 			match self.shortcut_state {
 				ShortcutState::AssignNew => {
 					self.shortcut_state = ShortcutState::Idle;
-					if self.valid_selection() {
+					if self.valid_selection()
+						&& e.code != KeyCode::Esc
+					{
 						self.options
 							.borrow_mut()
 							.assign_shortcut_for_branch(
