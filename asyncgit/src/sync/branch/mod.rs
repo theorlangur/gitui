@@ -6,7 +6,8 @@ pub mod merge_rebase;
 pub mod rename;
 
 use super::{
-	remotes::get_default_remote_in_repo, utils::bytes2string,
+	remotes::get_default_remote_in_repo,
+	utils::{self, bytes2string},
 	RepoPath,
 };
 use crate::{
@@ -316,6 +317,16 @@ pub fn checkout_branch(
 	} else {
 		Err(Error::UncommittedChanges)
 	}
+}
+
+///
+pub fn checkout_branch_cmd(
+	mut cmd: String,
+	branch: &str,
+) -> Result<()> {
+	cmd += " ";
+	cmd += branch;
+	utils::exec_git_external_command(&cmd)
 }
 
 /// Detach HEAD to point to a commit then checkout HEAD, does not work if there are uncommitted changes

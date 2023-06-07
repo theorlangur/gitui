@@ -109,6 +109,21 @@ impl Options {
 		&self.data.git_extern_cmds
 	}
 
+	pub fn set_git_extern_push(&mut self, cmd: Option<String>) {
+		self.data.git_extern_cmds.push_base = cmd;
+		self.save();
+	}
+
+	pub fn set_git_extern_fetch(&mut self, cmd: Option<String>) {
+		self.data.git_extern_cmds.fetch_base = cmd;
+		self.save();
+	}
+
+	pub fn set_git_extern_checkout(&mut self, cmd: Option<String>) {
+		self.data.git_extern_cmds.checkout_base = cmd;
+		self.save();
+	}
+
 	pub fn extern_commands(&self) -> &ExternCmdList {
 		&self.data.extern_cmds
 	}

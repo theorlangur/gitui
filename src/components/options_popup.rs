@@ -1,6 +1,6 @@
 use super::{
 	visibility_blocking, CommandBlocking, CommandInfo, Component,
-	DrawableComponent, EventState,
+	DrawableComponent, EventState, TextInputComponent,
 };
 use crate::{
 	components::utils::string_width_align,
@@ -15,10 +15,10 @@ use asyncgit::sync::ShowUntrackedFilesConfig;
 use crossterm::event::Event;
 use ratatui::{
 	backend::Backend,
-	layout::{Alignment, Rect},
+	layout::{Alignment, Constraint, Direction, Layout, Rect},
 	style::{Modifier, Style},
 	text::{Span, Spans},
-	widgets::{Block, Borders, Clear, Paragraph},
+	widgets::{Block, Borders, Clear, Paragraph, Tabs},
 	Frame,
 };
 
@@ -30,6 +30,46 @@ pub enum AppOption {
 	DiffInterhunkLines,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TabType {
+	Misc,
+	GitCmds,
+}
+
+impl TabType {
+	pub fn next(self) -> Self {
+		match self {
+			TabType::Misc => TabType::GitCmds,
+			TabType::GitCmds => TabType::Misc,
+		}
+	}
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum GitCmdOption {
+	GitPush,
+	GitFetch,
+	GitCheckout,
+}
+
+impl GitCmdOption {
+	pub fn next(&mut self) {
+		*self = match self {
+			GitCmdOption::GitPush => GitCmdOption::GitFetch,
+			GitCmdOption::GitFetch => GitCmdOption::GitCheckout,
+			GitCmdOption::GitCheckout => GitCmdOption::GitPush,
+		}
+	}
+
+	pub fn prev(&mut self) {
+		*self = match self {
+			GitCmdOption::GitPush => GitCmdOption::GitCheckout,
+			GitCmdOption::GitCheckout => GitCmdOption::GitFetch,
+			GitCmdOption::GitFetch => GitCmdOption::GitPush,
+		}
+	}
+}
+
 pub struct OptionsPopupComponent {
 	selection: AppOption,
 	queue: Queue,
@@ -37,6 +77,14 @@ pub struct OptionsPopupComponent {
 	key_config: SharedKeyConfig,
 	options: SharedOptions,
 	theme: SharedTheme,
+	current_tab: TabType,
+	git_cmd_selection: GitCmdOption,
+
+	input_git_push: TextInputComponent,
+	input_git_fetch: TextInputComponent,
+	input_git_checkout: TextInputComponent,
+
+	git_cmd_editing: bool,
 }
 
 impl OptionsPopupComponent {
@@ -51,9 +99,45 @@ impl OptionsPopupComponent {
 			selection: AppOption::StatusShowUntracked,
 			queue: queue.clone(),
 			visible: false,
-			key_config,
 			options,
+			current_tab: TabType::Misc,
+			git_cmd_selection: GitCmdOption::GitPush,
+			input_git_push: TextInputComponent::new(
+				theme.clone(),
+				key_config.clone(),
+				"",
+				"git push command here",
+				false,
+			)
+			.with_input_type(super::InputType::Singleline)
+			.make_embed()
+			.make_visible(),
+
+			input_git_fetch: TextInputComponent::new(
+				theme.clone(),
+				key_config.clone(),
+				"",
+				"git fetch command here",
+				false,
+			)
+			.with_input_type(super::InputType::Singleline)
+			.make_embed()
+			.make_visible(),
+
+			input_git_checkout: TextInputComponent::new(
+				theme.clone(),
+				key_config.clone(),
+				"",
+				"git checkout command here",
+				false,
+			)
+			.with_input_type(super::InputType::Singleline)
+			.make_embed()
+			.make_visible(),
+
+			key_config,
 			theme,
+			git_cmd_editing: false,
 		}
 	}
 
@@ -119,6 +203,38 @@ impl OptionsPopupComponent {
 		)]));
 	}
 
+	fn render_input<B: Backend>(
+		&self,
+		f: &mut Frame<B>,
+		area: Rect,
+		entry: &'static str,
+		field: &TextInputComponent,
+		selected: bool,
+	) -> Result<()> {
+		let title_size = usize::from(area.width / 3);
+		let input_size = area.width as usize - title_size;
+		let title = Span::styled(
+			string_width_align(entry, title_size),
+			self.theme.text(true, selected),
+		);
+		let title_area = Rect {
+			x: area.x,
+			y: area.y,
+			width: title_size as u16,
+			height: area.height,
+		};
+		let input_area = Rect {
+			x: area.x + title_size as u16,
+			y: area.y,
+			width: input_size as u16,
+			height: area.height,
+		};
+
+		f.render_widget(Paragraph::new(title), title_area);
+		field.draw(f, input_area)?;
+		Ok(())
+	}
+
 	fn add_entry(
 		&self,
 		txt: &mut Vec<Spans>,
@@ -138,6 +254,61 @@ impl OptionsPopupComponent {
 				self.theme.text(true, selected),
 			),
 		]));
+	}
+
+	fn render_git_cmds_tab<B: Backend>(
+		&self,
+		f: &mut Frame<B>,
+		area: Rect,
+	) -> Result<()> {
+		let outer_block = Block::default()
+			.borders(Borders::ALL)
+			.border_style(self.theme.block(true));
+		let mut content_rect = outer_block.inner(area);
+		f.render_widget(outer_block, area);
+		content_rect.height = 1;
+		self.render_input(
+			f,
+			content_rect,
+			"Git Push",
+			&self.input_git_push,
+			self.git_cmd_selection == GitCmdOption::GitPush,
+		)?;
+		content_rect.y += 1;
+		self.render_input(
+			f,
+			content_rect,
+			"Git Fetch",
+			&self.input_git_fetch,
+			self.git_cmd_selection == GitCmdOption::GitFetch,
+		)?;
+		content_rect.y += 1;
+		self.render_input(
+			f,
+			content_rect,
+			"Git Checkout",
+			&self.input_git_checkout,
+			self.git_cmd_selection == GitCmdOption::GitCheckout,
+		)?;
+		Ok(())
+	}
+
+	fn render_misc_options_tab<B: Backend>(
+		&self,
+		f: &mut Frame<B>,
+		area: Rect,
+	) -> Result<()> {
+		f.render_widget(
+			Paragraph::new(self.get_text(area.width))
+				.block(
+					Block::default()
+						.borders(Borders::ALL)
+						.border_style(self.theme.block(true)),
+				)
+				.alignment(Alignment::Left),
+			area,
+		);
+		Ok(())
 	}
 
 	fn move_selection(&mut self, up: bool) {
@@ -175,6 +346,8 @@ impl OptionsPopupComponent {
 	}
 
 	fn switch_option(&mut self, right: bool) {
+		//let mut opts: std::cell::RefMut<Options> =
+		//	self.options.borrow_mut();
 		if right {
 			match self.selection {
 				AppOption::StatusShowUntracked => {
@@ -258,6 +431,105 @@ impl OptionsPopupComponent {
 		self.queue
 			.push(InternalEvent::OptionSwitched(self.selection));
 	}
+
+	fn event_misc(
+		&mut self,
+		event: &crossterm::event::Event,
+	) -> Result<EventState> {
+		if let Event::Key(key) = event {
+			if key_match(key, self.key_config.keys.move_up) {
+				self.move_selection(true);
+			} else if key_match(key, self.key_config.keys.move_down) {
+				self.move_selection(false);
+			} else if key_match(key, self.key_config.keys.move_right)
+			{
+				self.switch_option(true);
+			} else if key_match(key, self.key_config.keys.move_left) {
+				self.switch_option(false);
+			}
+		}
+
+		return Ok(EventState::Consumed);
+	}
+
+	fn get_selected_git_input(&self) -> &TextInputComponent {
+		match self.git_cmd_selection {
+			GitCmdOption::GitPush => &self.input_git_push,
+			GitCmdOption::GitFetch => &self.input_git_fetch,
+			GitCmdOption::GitCheckout => &self.input_git_checkout,
+		}
+	}
+
+	fn get_selected_git_input_mut(
+		&mut self,
+	) -> &mut TextInputComponent {
+		match self.git_cmd_selection {
+			GitCmdOption::GitPush => &mut self.input_git_push,
+			GitCmdOption::GitFetch => &mut self.input_git_fetch,
+			GitCmdOption::GitCheckout => &mut self.input_git_checkout,
+		}
+	}
+
+	fn get_selected_git_cmd(&self) -> String {
+		self.get_selected_git_input().get_text().to_string()
+	}
+
+	fn event_git_cmds(
+		&mut self,
+		event: &crossterm::event::Event,
+	) -> Result<EventState> {
+		if let Event::Key(key) = event {
+			if key_match(key, self.key_config.keys.enter) {
+				if self.git_cmd_editing {
+					//finish editing
+					self.git_cmd_editing = false;
+					self.get_selected_git_input_mut()
+						.set_selected(false);
+					let res = self.get_selected_git_cmd();
+					let res =
+						if res.is_empty() { None } else { Some(res) };
+					match self.git_cmd_selection {
+						GitCmdOption::GitPush => self
+							.options
+							.borrow_mut()
+							.set_git_extern_push(res),
+						GitCmdOption::GitFetch => self
+							.options
+							.borrow_mut()
+							.set_git_extern_fetch(res),
+						GitCmdOption::GitCheckout => self
+							.options
+							.borrow_mut()
+							.set_git_extern_checkout(res),
+					}
+				} else {
+					//enter editing
+					self.git_cmd_editing = true;
+					self.get_selected_git_input_mut()
+						.set_selected(true);
+				}
+			} else if self.git_cmd_editing {
+				//forward
+				return match self.git_cmd_selection {
+					GitCmdOption::GitPush => {
+						self.input_git_push.event(event)
+					}
+					GitCmdOption::GitFetch => {
+						self.input_git_fetch.event(event)
+					}
+					GitCmdOption::GitCheckout => {
+						self.input_git_checkout.event(event)
+					}
+				};
+			} else if key_match(key, self.key_config.keys.move_up) {
+				self.git_cmd_selection.prev();
+			} else if key_match(key, self.key_config.keys.move_down) {
+				self.git_cmd_selection.next();
+			}
+		}
+
+		return Ok(EventState::Consumed);
+	}
 }
 
 impl DrawableComponent for OptionsPopupComponent {
@@ -267,27 +539,42 @@ impl DrawableComponent for OptionsPopupComponent {
 		area: Rect,
 	) -> Result<()> {
 		if self.is_visible() {
-			const SIZE: (u16, u16) = (50, 10);
+			const SIZE: (u16, u16) = (50, 12);
 			let area =
 				ui::centered_rect_absolute(SIZE.0, SIZE.1, area);
-
-			let width = area.width;
-
 			f.render_widget(Clear, area);
-			f.render_widget(
-				Paragraph::new(self.get_text(width))
-					.block(
-						Block::default()
-							.borders(Borders::ALL)
-							.title(Span::styled(
-								"Options",
-								self.theme.title(true),
-							))
-							.border_style(self.theme.block(true)),
-					)
-					.alignment(Alignment::Left),
-				area,
-			);
+
+			let chunks = Layout::default()
+				.direction(Direction::Vertical)
+				//.margin(5)
+				.constraints(
+					[Constraint::Length(3), Constraint::Min(0)]
+						.as_ref(),
+				)
+				.split(area);
+
+			let titles = ["Misc", "Git commands"]
+				.iter()
+				.cloned()
+				.map(|i| Spans::from(i))
+				.collect();
+
+			let tabs = Tabs::new(titles)
+				.block(Block::default().borders(Borders::ALL))
+				.style(self.theme.tab(false))
+				.highlight_style(self.theme.tab(true))
+				.select(self.current_tab as usize)
+				.divider("|");
+			f.render_widget(tabs, chunks[0]);
+
+			match self.current_tab {
+				TabType::Misc => {
+					self.render_misc_options_tab(f, chunks[1])?
+				}
+				TabType::GitCmds => {
+					self.render_git_cmds_tab(f, chunks[1])?
+				}
+			}
 		}
 
 		Ok(())
@@ -332,28 +619,20 @@ impl Component for OptionsPopupComponent {
 			if let Event::Key(key) = &event {
 				if key_match(key, self.key_config.keys.exit_popup) {
 					self.hide();
-				} else if key_match(key, self.key_config.keys.move_up)
-				{
-					self.move_selection(true);
+					return Ok(EventState::Consumed);
 				} else if key_match(
 					key,
-					self.key_config.keys.move_down,
+					self.key_config.keys.toggle_workarea,
 				) {
-					self.move_selection(false);
-				} else if key_match(
-					key,
-					self.key_config.keys.move_right,
-				) {
-					self.switch_option(true);
-				} else if key_match(
-					key,
-					self.key_config.keys.move_left,
-				) {
-					self.switch_option(false);
+					self.current_tab = self.current_tab.next();
+					return Ok(EventState::Consumed);
 				}
 			}
 
-			return Ok(EventState::Consumed);
+			return match self.current_tab {
+				TabType::Misc => self.event_misc(event),
+				TabType::GitCmds => self.event_git_cmds(event),
+			};
 		}
 
 		Ok(EventState::NotConsumed)
@@ -369,6 +648,30 @@ impl Component for OptionsPopupComponent {
 
 	fn show(&mut self) -> Result<()> {
 		self.visible = true;
+		self.input_git_push.set_text(
+			self.options
+				.borrow()
+				.git_extern_commands()
+				.push_base
+				.as_ref()
+				.map_or(String::new(), |i| i.clone()),
+		);
+		self.input_git_fetch.set_text(
+			self.options
+				.borrow()
+				.git_extern_commands()
+				.fetch_base
+				.as_ref()
+				.map_or(String::new(), |i| i.clone()),
+		);
+		self.input_git_checkout.set_text(
+			self.options
+				.borrow()
+				.git_extern_commands()
+				.checkout_base
+				.as_ref()
+				.map_or(String::new(), |i| i.clone()),
+		);
 
 		Ok(())
 	}

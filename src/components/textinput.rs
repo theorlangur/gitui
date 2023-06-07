@@ -43,6 +43,7 @@ pub struct TextInputComponent {
 	input_type: InputType,
 	current_area: Cell<Rect>,
 	embed: bool,
+	selected: bool,
 }
 
 impl TextInputComponent {
@@ -66,6 +67,7 @@ impl TextInputComponent {
 			input_type: InputType::Multiline,
 			current_area: Cell::new(Rect::default()),
 			embed: false,
+			selected: false,
 		}
 	}
 
@@ -100,6 +102,11 @@ impl TextInputComponent {
 
 	pub fn make_embed(mut self) -> Self {
 		self.embed = true;
+		self
+	}
+
+	pub fn make_visible(mut self) -> Self {
+		self.visible = true;
 		self
 	}
 
@@ -227,8 +234,13 @@ impl TextInputComponent {
 		self.default_msg = v;
 	}
 
+	///
+	pub fn set_selected(&mut self, s: bool) {
+		self.selected = s;
+	}
+
 	fn get_draw_text(&self) -> Text {
-		let style = self.theme.text(true, false);
+		let style = self.theme.text(true, self.selected);
 
 		let mut txt = Text::default();
 		// The portion of the text before the cursor is added
@@ -360,7 +372,7 @@ impl DrawableComponent for TextInputComponent {
 			let txt = if self.msg.is_empty() {
 				Text::styled(
 					self.default_msg.as_str(),
-					self.theme.text(false, false),
+					self.theme.text(false, self.selected),
 				)
 			} else {
 				self.get_draw_text()

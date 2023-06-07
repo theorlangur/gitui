@@ -13,18 +13,18 @@ use super::{repository::repo, RepoPath};
 pub struct GitExternCommands {
 	///base push command (git push)
 	pub push_base: Option<String>,
-	///base pull command (git pull)
-	//pub pull_base: Option<String>,
 	///base fetch command (git fetch)
 	pub fetch_base: Option<String>,
+	///base checkout command (git checkout)
+	pub checkout_base: Option<String>,
 }
 
 impl Default for GitExternCommands {
 	fn default() -> Self {
 		Self {
 			push_base: None,
-			//pull_base: None,
 			fetch_base: None,
+			checkout_base: None,
 		}
 	}
 }

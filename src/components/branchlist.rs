@@ -18,8 +18,8 @@ use asyncgit::{
 	sync::{
 		self,
 		branch::{
-			checkout_remote_branch, BranchDetails, LocalBranch,
-			RemoteBranch,
+			checkout_branch_cmd, checkout_remote_branch,
+			BranchDetails, LocalBranch, RemoteBranch,
 		},
 		checkout_branch, get_branches_info, BranchInfo, BranchType,
 		CommitId, RepoPathRef, RepoState,
@@ -841,20 +841,48 @@ impl BranchListComponent {
 		if !self.valid_selection() {
 			anyhow::bail!("no valid branch selected");
 		}
+		let cmd = self
+			.options
+			.borrow()
+			.git_extern_commands()
+			.checkout_base
+			.as_ref()
+			.map_or(String::new(), |i| i.clone());
 
-		if self.local {
-			checkout_branch(
-				&self.repo.borrow(),
-				&self.branches[self.selection as usize].reference,
-			)?;
-			self.hide();
+		if !cmd.is_empty() {
+			let branch = if self.local {
+				self.branches[self.selection as usize]
+					.reference
+					.clone()
+			} else {
+				let branch = &self.branches[self.selection as usize];
+				branch.name.find('/').map_or_else(
+					|| branch.name.clone(),
+					|pos| branch.name[pos..].to_string(),
+				)
+			};
+			checkout_branch_cmd(cmd, &branch)?;
+			if self.local {
+				self.hide();
+			} else {
+				self.local = true;
+				self.update_branches()?;
+			}
 		} else {
-			checkout_remote_branch(
-				&self.repo.borrow(),
-				&self.branches[self.selection as usize],
-			)?;
-			self.local = true;
-			self.update_branches()?;
+			if self.local {
+				checkout_branch(
+					&self.repo.borrow(),
+					&self.branches[self.selection as usize].reference,
+				)?;
+				self.hide();
+			} else {
+				checkout_remote_branch(
+					&self.repo.borrow(),
+					&self.branches[self.selection as usize],
+				)?;
+				self.local = true;
+				self.update_branches()?;
+			}
 		}
 
 		self.queue.push(InternalEvent::Update(NeedsUpdate::ALL));
