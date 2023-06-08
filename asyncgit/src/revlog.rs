@@ -35,6 +35,7 @@ pub struct AsyncLog {
 	filter: Option<LogWalkerFilter>,
 	repo: RepoPath,
 	filter_updated: bool,
+	start_commit: Arc<Mutex<Option<CommitId>>>,
 }
 
 static LIMIT_COUNT: usize = 3000;
@@ -57,6 +58,7 @@ impl AsyncLog {
 			background: Arc::new(AtomicBool::new(false)),
 			filter,
 			filter_updated: false,
+			start_commit: Arc::new(Mutex::new(None)),
 		}
 	}
 
@@ -136,6 +138,15 @@ impl AsyncLog {
 	}
 
 	///
+	pub fn set_start_commit(
+		&mut self,
+		c: Option<CommitId>,
+	) -> Result<()> {
+		*self.start_commit.lock()? = c;
+		Ok(())
+	}
+
+	///
 	pub fn position(&self, id: CommitId) -> Result<Option<usize>> {
 		let list = self.current.lock()?;
 		let position = list.iter().position(|&x| x == id);
@@ -195,6 +206,7 @@ impl AsyncLog {
 		let arc_background = Arc::clone(&self.background);
 		let filter = self.filter.clone();
 		let repo_path = self.repo.clone();
+		let start_commit = self.start_commit.clone();
 
 		self.pending.store(true, Ordering::Relaxed);
 
@@ -212,6 +224,7 @@ impl AsyncLog {
 				&arc_background,
 				&sender,
 				filter,
+				start_commit,
 			)
 			.expect("failed to fetch");
 
@@ -229,12 +242,19 @@ impl AsyncLog {
 		arc_background: &Arc<AtomicBool>,
 		sender: &Sender<AsyncGitNotification>,
 		filter: Option<LogWalkerFilter>,
+		arc_start: Arc<Mutex<Option<CommitId>>>,
 	) -> Result<()> {
 		let mut entries = Vec::with_capacity(LIMIT_COUNT);
 		let r = repo(repo_path)?;
 		let has_filter = filter.is_some();
-		let mut walker =
-			LogWalker::new(&r, LIMIT_COUNT)?.filter(filter);
+		let start = arc_start.lock()?;
+		let start_commit = start.clone();
+		let mut walker = LogWalker::new_with_start(
+			&r,
+			start_commit.as_ref(),
+			LIMIT_COUNT,
+		)?
+		.filter(filter);
 		loop {
 			entries.clear();
 			let res_is_err = walker.read_eof(&mut entries).is_err();
