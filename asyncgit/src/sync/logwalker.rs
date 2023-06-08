@@ -72,8 +72,16 @@ pub struct LogWalker<'a> {
 
 impl<'a> LogWalker<'a> {
 	///
-	pub fn new(repo: &'a Repository, limit: usize) -> Result<Self> {
-		let c = repo.head()?.peel_to_commit()?;
+	pub fn new_with_start(
+		repo: &'a Repository,
+		start: Option<&CommitId>,
+		limit: usize,
+	) -> Result<Self> {
+		let c = if let Some(start) = start {
+			repo.find_commit(start.get_oid())?
+		} else {
+			repo.head()?.peel_to_commit()?
+		};
 
 		let mut commits = BinaryHeap::with_capacity(10);
 		commits.push(TimeOrderedCommit(c));
@@ -85,6 +93,11 @@ impl<'a> LogWalker<'a> {
 			repo,
 			filter: None,
 		})
+	}
+
+	///
+	pub fn new(repo: &'a Repository, limit: usize) -> Result<Self> {
+		Self::new_with_start(repo, None, limit)
 	}
 
 	///
