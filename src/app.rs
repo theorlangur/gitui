@@ -25,7 +25,7 @@ use crate::{
 	},
 	setup_popups,
 	strings::{self, ellipsis_trim_start, order},
-	tabs::{FilesTab, Revlog, StashList, Stashing, Status},
+	tabs::{FilesTab, RevlogExtern, StashList, Stashing, Status},
 	ui::style::{SharedTheme, Theme},
 	AsyncAppNotification, AsyncNotification,
 };
@@ -101,7 +101,7 @@ pub struct App {
 	reset_popup: ResetPopupComponent,
 	cmdbar: RefCell<CommandBar>,
 	tab: usize,
-	revlog: Revlog,
+	revlog: RevlogExtern,
 	status_tab: Status,
 	stashing_tab: Stashing,
 	stashlist_tab: StashList,
@@ -320,7 +320,7 @@ impl App {
 				key_config.clone(),
 			),
 			msg: MsgComponent::new(theme.clone(), key_config.clone()),
-			revlog: Revlog::new(
+			revlog: RevlogExtern::new(
 				&repo,
 				&queue,
 				sender,
