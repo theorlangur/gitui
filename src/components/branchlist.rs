@@ -851,9 +851,7 @@ impl BranchListComponent {
 
 		if !cmd.is_empty() {
 			let branch = if self.local {
-				self.branches[self.selection as usize]
-					.reference
-					.clone()
+				self.branches[self.selection as usize].name.clone()
 			} else {
 				let branch = &self.branches[self.selection as usize];
 				branch.name.find('/').map_or_else(
@@ -861,8 +859,15 @@ impl BranchListComponent {
 					|pos| branch.name[pos..].to_string(),
 				)
 			};
-			checkout_branch_cmd(cmd, &branch)?;
-			if self.local {
+			let r = checkout_branch_cmd(cmd, &branch);
+			if let Err(e) = r {
+				self.queue.push(
+					crate::queue::InternalEvent::ShowErrorMsg(
+						format!("{}\n{}", "Checkout failed", e),
+					),
+				);
+				self.hide();
+			} else if self.local {
 				self.hide();
 			} else {
 				self.local = true;
