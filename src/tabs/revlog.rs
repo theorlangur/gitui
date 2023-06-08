@@ -163,6 +163,15 @@ impl Revlog {
 			if self.list.items().needs_data(selection, selection_max)
 				|| log_changed || filter_updated
 			{
+				if let Some(last_commit) =
+					self.list.get_last_selected_commit()
+				{
+					if let Some(search_result) =
+						self.git_log.search_commit_by_id(last_commit)
+					{
+						self.list.select_entry(search_result);
+					}
+				}
 				self.fetch_commits()?;
 			}
 

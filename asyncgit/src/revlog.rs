@@ -80,6 +80,21 @@ impl AsyncLog {
 	}
 
 	///
+	pub fn search_commit_by_id(
+		&self,
+		commit: &CommitId,
+	) -> Option<usize> {
+		if let Ok(list) = self.current.lock() {
+			list.iter()
+				.enumerate()
+				.find(|i| i.1 == commit)
+				.map(|i| i.0)
+		} else {
+			None
+		}
+	}
+
+	///
 	pub fn search_commit_forward<F>(
 		&self,
 		start_index: usize,

@@ -86,6 +86,7 @@ pub struct CommitList {
 	filter_updated: bool,
 	combo_state: KeyComboState,
 	extended_search_request: ExternalSearchRequest,
+	last_selected_commit: Option<CommitId>,
 }
 
 impl CommitList {
@@ -144,6 +145,7 @@ impl CommitList {
 			filter_updated: true,
 			combo_state: KeyComboState::Empty,
 			extended_search_request: ExternalSearchRequest::Empty,
+			last_selected_commit: None,
 		}
 	}
 
@@ -287,6 +289,15 @@ impl CommitList {
 	}
 
 	///
+	pub fn get_last_selected_commit(&self) -> Option<&CommitId> {
+		if !self.is_filter_active() && !self.is_search_active() {
+			self.last_selected_commit.as_ref()
+		} else {
+			None
+		}
+	}
+
+	///
 	pub fn selected_entry_marked(&self) -> bool {
 		self.selected_entry()
 			.and_then(|e| self.is_marked(&e.id))
@@ -348,8 +359,7 @@ impl CommitList {
 			cmp::min(new_selection, self.selection_max());
 
 		let needs_update = new_selection != self.selection;
-
-		self.selection = new_selection;
+		self.select_entry(new_selection);
 
 		Ok(needs_update)
 	}
@@ -605,8 +615,21 @@ impl CommitList {
 		self.selection.saturating_sub(self.items.index_offset())
 	}
 
+	pub fn is_filter_active(&self) -> bool {
+		self.filter_field.is_visible()
+	}
+
+	pub fn is_search_active(&self) -> bool {
+		self.search_field.is_visible()
+	}
+
 	pub fn select_entry(&mut self, position: usize) {
 		self.selection = position;
+		if let Some(e) = self.selected_entry() {
+			self.last_selected_commit = Some(e.id.clone());
+		} else {
+			self.last_selected_commit = None;
+		}
 	}
 
 	pub fn checkout(&mut self) {
