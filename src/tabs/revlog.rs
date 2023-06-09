@@ -6,7 +6,7 @@ use crate::{
 		ExternalSearchRequest, FileTreeOpen, InspectCommitOpen,
 	},
 	keys::{key_match, SharedKeyConfig},
-	queue::{InternalEvent, Queue, StackablePopupOpen},
+	queue::{InternalEvent, NeedsUpdate, Queue, StackablePopupOpen},
 	strings, try_or_popup,
 	ui::style::SharedTheme,
 };
@@ -41,6 +41,7 @@ pub struct Revlog {
 	queue: Queue,
 	visible: bool,
 	key_config: SharedKeyConfig,
+	target_branch: Option<(String, CommitId)>,
 }
 
 impl Revlog {
@@ -79,6 +80,28 @@ impl Revlog {
 			git_remote_branches: AsyncSingleJob::new(sender.clone()),
 			visible: false,
 			key_config,
+			target_branch: None,
+		}
+	}
+
+	///
+	pub fn set_target_branch(
+		&mut self,
+		target: Option<(String, CommitId)>,
+	) {
+		self.target_branch = target;
+		if let Ok(_) = self.git_log.set_start_commit(
+			self.target_branch.as_ref().map(|i| i.1.clone()),
+		) {
+			self.list.clear_last_selected_commit();
+			self.list.set_title(
+				self.target_branch
+					.as_ref()
+					.map(|i| i.0.clone())
+					.unwrap_or_default()
+					.into(),
+			);
+			self.queue.push(InternalEvent::Update(NeedsUpdate::ALL));
 		}
 	}
 
@@ -610,5 +633,13 @@ impl Component for Revlog {
 		self.update()?;
 
 		Ok(())
+	}
+
+	fn focus(&mut self, _focus: bool) {
+		self.list.focus(_focus);
+	}
+
+	fn focused(&self) -> bool {
+		self.list.focused()
 	}
 }

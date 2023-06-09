@@ -3,8 +3,8 @@ use crate::{
 		visibility_blocking, CommandBlocking, CommandInfo, Component,
 		DrawableComponent, EventState,
 	},
-	keys::SharedKeyConfig,
-	queue::Queue,
+	keys::{key_match, SharedKeyConfig},
+	queue::{InternalEvent, LocalEvent, Queue, SharedLocalQueue},
 	ui::style::SharedTheme,
 };
 use anyhow::Result;
@@ -14,7 +14,11 @@ use asyncgit::{
 };
 use crossbeam_channel::Sender;
 use crossterm::event::Event;
-use ratatui::{backend::Backend, layout::Rect, Frame};
+use ratatui::{
+	backend::Backend,
+	layout::{Constraint, Layout, Rect},
+	Frame,
+};
 
 use super::Revlog;
 
@@ -22,6 +26,15 @@ use super::Revlog;
 enum Focus {
 	MainLog,
 	CompareLog,
+}
+
+impl Focus {
+	pub fn get_next(&self) -> Focus {
+		match self {
+			Focus::CompareLog => Focus::MainLog,
+			Focus::MainLog => Focus::CompareLog,
+		}
+	}
 }
 
 ///
@@ -33,6 +46,7 @@ pub struct RevlogExtern {
 	visible: bool,
 	key_config: SharedKeyConfig,
 	focused: Focus,
+	local_queue: SharedLocalQueue,
 }
 
 impl RevlogExtern {
@@ -64,6 +78,7 @@ impl RevlogExtern {
 			visible: false,
 			key_config,
 			focused: Focus::MainLog,
+			local_queue: crate::queue::create_local_queue(),
 		}
 	}
 
@@ -78,9 +93,21 @@ impl RevlogExtern {
 			|| self.compare_log.any_work_pending()
 	}
 
+	fn process_local_queue(&mut self) {
+		let mut q = self.local_queue.borrow_mut();
+		while let Some(e) = q.pop_front() {
+			match e {
+				LocalEvent::PickBranch(b) => self
+					.compare_log
+					.set_target_branch(Some((b.name, b.top_commit))),
+			}
+		}
+	}
+
 	///
 	pub fn update(&mut self) -> Result<()> {
 		if self.is_visible() {
+			self.process_local_queue();
 			self.main_log.update()?;
 			self.compare_log.update()?;
 		}
@@ -100,6 +127,12 @@ impl RevlogExtern {
 
 		Ok(())
 	}
+
+	fn set_focus(&mut self, f: Focus) {
+		self.focused = f;
+		self.compare_log.focus(self.focused == Focus::CompareLog);
+		self.main_log.focus(self.focused == Focus::MainLog);
+	}
 }
 
 impl DrawableComponent for RevlogExtern {
@@ -108,17 +141,72 @@ impl DrawableComponent for RevlogExtern {
 		f: &mut Frame<B>,
 		area: Rect,
 	) -> Result<()> {
-		self.main_log.draw(f, area)?;
+		if self.compare_log.is_visible() {
+			//split in 2
+			let v_blocks = Layout::default()
+				.direction(ratatui::layout::Direction::Vertical)
+				.constraints(
+					[
+						Constraint::Percentage(50),
+						Constraint::Percentage(50),
+					]
+					.as_ref(),
+				)
+				.split(area);
+			self.main_log.draw(f, v_blocks[0])?;
+			self.compare_log.draw(f, v_blocks[1])?;
+		} else {
+			self.main_log.draw(f, area)?;
+		}
 		Ok(())
 	}
 }
 
 impl Component for RevlogExtern {
-	//TODO: cleanup
-	#[allow(clippy::too_many_lines)]
 	fn event(&mut self, ev: &Event) -> Result<EventState> {
 		if self.visible {
-			return self.main_log.event(ev);
+			if let Event::Key(k) = ev {
+				if key_match(k, self.key_config.keys.toggle_split) {
+					if self.compare_log.is_visible() {
+						self.compare_log.hide();
+						self.set_focus(Focus::MainLog);
+					} else {
+						if let Ok(head) =
+							asyncgit::sync::get_head_tuple_branch(
+								&self.repo.borrow(),
+							) {
+							self.compare_log.set_target_branch(Some(
+								(head.name, head.id),
+							));
+						}
+						self.compare_log.show()?;
+						self.set_focus(Focus::CompareLog);
+					}
+					return Ok(EventState::Consumed);
+				} else if key_match(
+					k,
+					self.key_config.keys.toggle_workarea,
+				) && self.compare_log.is_visible()
+				{
+					self.set_focus(self.focused.get_next());
+					return Ok(EventState::Consumed);
+				} else if self.focused == Focus::CompareLog
+					&& key_match(
+						k,
+						self.key_config.keys.select_branch,
+					) {
+					//no checkout select branch
+					self.queue.push(InternalEvent::PickBranch(
+						self.local_queue.clone(),
+					));
+					return Ok(EventState::Consumed);
+				}
+			}
+
+			return match self.focused {
+				Focus::MainLog => self.main_log.event(ev),
+				Focus::CompareLog => self.compare_log.event(ev),
+			};
 		}
 
 		Ok(EventState::NotConsumed)
@@ -129,7 +217,12 @@ impl Component for RevlogExtern {
 		out: &mut Vec<CommandInfo>,
 		force_all: bool,
 	) -> CommandBlocking {
-		self.main_log.commands(out, force_all);
+		match self.focused {
+			Focus::MainLog => self.main_log.commands(out, force_all),
+			Focus::CompareLog => {
+				self.compare_log.commands(out, force_all)
+			}
+		};
 		visibility_blocking(self)
 	}
 
@@ -139,15 +232,11 @@ impl Component for RevlogExtern {
 
 	fn hide(&mut self) {
 		self.visible = false;
-		self.main_log.hide();
-		self.compare_log.hide();
 	}
 
 	fn show(&mut self) -> Result<()> {
 		self.visible = true;
 		self.main_log.show()?;
-		self.compare_log.show()?;
-
 		self.update()?;
 
 		Ok(())

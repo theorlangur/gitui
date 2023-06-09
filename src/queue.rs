@@ -6,7 +6,7 @@ use crate::{
 	tabs::StashingOptions,
 };
 use asyncgit::{
-	sync::{diff::DiffLinePosition, CommitId, TreeFile},
+	sync::{diff::DiffLinePosition, BranchInfo, CommitId, TreeFile},
 	PushType,
 };
 use bitflags::bitflags;
@@ -26,6 +26,17 @@ bitflags! {
 		/// branches have changed
 		const BRANCHES = 0b1000;
 	}
+}
+
+pub enum LocalEvent {
+	PickBranch(BranchInfo),
+}
+
+pub type LocalQueue = VecDeque<LocalEvent>;
+pub type SharedLocalQueue = Rc<RefCell<LocalQueue>>;
+
+pub fn create_local_queue() -> SharedLocalQueue {
+	Rc::new(RefCell::new(LocalQueue::new()))
 }
 
 /// data of item that is supposed to be reset
@@ -104,6 +115,8 @@ pub enum InternalEvent {
 	RenameBranch(String, String),
 	///
 	SelectBranch,
+	///
+	PickBranch(SharedLocalQueue),
 	///
 	OpenExternalEditor(Option<String>),
 	///

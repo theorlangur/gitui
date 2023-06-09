@@ -87,6 +87,7 @@ pub struct CommitList {
 	combo_state: KeyComboState,
 	extended_search_request: ExternalSearchRequest,
 	last_selected_commit: Option<CommitId>,
+	external_focus: bool,
 }
 
 impl CommitList {
@@ -146,6 +147,7 @@ impl CommitList {
 			combo_state: KeyComboState::Empty,
 			extended_search_request: ExternalSearchRequest::Empty,
 			last_selected_commit: None,
+			external_focus: true,
 		}
 	}
 
@@ -244,6 +246,11 @@ impl CommitList {
 	}
 
 	///
+	pub fn set_title(&mut self, t: Box<str>) {
+		self.title = t;
+	}
+
+	///
 	pub const fn selection(&self) -> usize {
 		self.selection
 	}
@@ -286,6 +293,10 @@ impl CommitList {
 		self.items.iter().nth(
 			self.selection.saturating_sub(self.items.index_offset()),
 		)
+	}
+
+	pub fn clear_last_selected_commit(&mut self) {
+		self.last_selected_commit = None;
 	}
 
 	///
@@ -420,6 +431,7 @@ impl CommitList {
 	fn get_entry_to_add<'a>(
 		e: &'a LogEntry,
 		selected: bool,
+		external_focus: bool,
 		tags: Option<String>,
 		local_branches: Option<String>,
 		remote_branches: Option<String>,
@@ -433,8 +445,10 @@ impl CommitList {
 		);
 
 		let splitter_txt = Cow::from(symbol::EMPTY_SPACE);
-		let splitter =
-			Span::styled(splitter_txt, theme.text(true, selected));
+		let splitter = Span::styled(
+			splitter_txt,
+			theme.text(external_focus, selected),
+		);
 
 		// marker
 		if let Some(marked) = marked {
@@ -597,6 +611,7 @@ impl CommitList {
 			txt.push(Self::get_entry_to_add(
 				e,
 				idx + self.scroll_top.get() == selection,
+				self.external_focus,
 				tags,
 				local_branches,
 				remote_branches,
@@ -1097,9 +1112,15 @@ impl DrawableComponent for CommitList {
 					.borders(Borders::ALL)
 					.title(Span::styled(
 						title.as_str(),
-						self.theme.title(list_focused),
+						self.theme.title(
+							list_focused && self.external_focus,
+						),
 					))
-					.border_style(self.theme.block(list_focused)),
+					.border_style(
+						self.theme.block(
+							list_focused && self.external_focus,
+						),
+					),
 			)
 			.alignment(Alignment::Left),
 			area,
@@ -1200,6 +1221,14 @@ impl Component for CommitList {
 			true,
 		));
 		CommandBlocking::PassingOn
+	}
+
+	fn focus(&mut self, _focus: bool) {
+		self.external_focus = _focus;
+	}
+
+	fn focused(&self) -> bool {
+		self.external_focus
 	}
 }
 

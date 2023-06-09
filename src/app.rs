@@ -903,6 +903,9 @@ impl App {
 				self.rename_branch_popup
 					.open(branch_ref, cur_name)?;
 			}
+			InternalEvent::PickBranch(q) => {
+				self.select_branch_popup.open_to_pick(q)?;
+			}
 			InternalEvent::SelectBranch => {
 				self.select_branch_popup.open()?;
 			}

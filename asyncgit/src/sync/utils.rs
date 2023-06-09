@@ -71,6 +71,15 @@ pub fn get_head_tuple(repo_path: &RepoPath) -> Result<Head> {
 }
 
 ///
+pub fn get_head_tuple_branch(repo_path: &RepoPath) -> Result<Head> {
+	let repo = repo(repo_path)?;
+	let id = get_head_repo(&repo)?;
+	let name = get_head_name(&repo_path)?;
+
+	Ok(Head { name, id })
+}
+
+///
 pub fn get_head_name(repo_path: &RepoPath) -> Result<String> {
 	let repo = repo(repo_path)?;
 	let href = repo.head()?;

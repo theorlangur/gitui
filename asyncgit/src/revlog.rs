@@ -171,7 +171,9 @@ impl AsyncLog {
 
 	///
 	fn head_changed(&self) -> Result<bool> {
-		if let Ok(head) = repo(&self.repo)?.head() {
+		if let Some(c) = self.start_commit.lock()?.clone() {
+			return Ok(Some(c) != self.current_head()?);
+		} else if let Ok(head) = repo(&self.repo)?.head() {
 			return Ok(
 				head.target() != self.current_head()?.map(Into::into)
 			);
@@ -210,7 +212,9 @@ impl AsyncLog {
 
 		self.pending.store(true, Ordering::Relaxed);
 
-		if let Ok(head) = repo(&self.repo)?.head() {
+		if let Some(c) = self.start_commit.lock()?.clone() {
+			*self.current_head.lock()? = Some(c);
+		} else if let Ok(head) = repo(&self.repo)?.head() {
 			*self.current_head.lock()? =
 				head.target().map(CommitId::new);
 		}

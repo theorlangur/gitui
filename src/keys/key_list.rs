@@ -140,6 +140,7 @@ pub struct KeysList {
 	pub clear_shortcut: GituiKeyEvent,
 	pub clear_all_shortcut: GituiKeyEvent,
 	pub trigger_branch_shortcut: GituiKeyEvent,
+	pub toggle_split: GituiKeyEvent,
 }
 
 #[rustfmt::skip]
@@ -243,6 +244,7 @@ impl Default for KeysList {
 			clear_shortcut: GituiKeyEvent::new(KeyCode::Char('x'),  KeyModifiers::empty()),
 			clear_all_shortcut: GituiKeyEvent::new(KeyCode::Char('X'),  KeyModifiers::SHIFT),
 			trigger_branch_shortcut: GituiKeyEvent::new(KeyCode::Char('b'),  KeyModifiers::empty()),
+            toggle_split: GituiKeyEvent::new(KeyCode::Char('|'),  KeyModifiers::empty()),
 		}
 	}
 }

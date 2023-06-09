@@ -8,7 +8,8 @@ use crate::{
 	keys::{key_match, SharedKeyConfig},
 	options::SharedOptions,
 	queue::{
-		Action, InternalEvent, NeedsUpdate, Queue, StackablePopupOpen,
+		Action, InternalEvent, LocalEvent, NeedsUpdate, Queue,
+		SharedLocalQueue, StackablePopupOpen,
 	},
 	strings, try_or_popup,
 	ui::{self, show_message_in_center, Size},
@@ -47,6 +48,11 @@ enum ShortcutState {
 	Trigger,
 }
 
+enum Mode {
+	Checkout,
+	Pick,
+}
+
 ///
 pub struct BranchListComponent {
 	repo: RepoPathRef,
@@ -62,6 +68,8 @@ pub struct BranchListComponent {
 	key_config: SharedKeyConfig,
 	options: SharedOptions,
 	shortcut_state: ShortcutState,
+	mode: Mode,
+	response_queue: Option<SharedLocalQueue>,
 }
 
 impl DrawableComponent for BranchListComponent {
@@ -308,7 +316,7 @@ impl Component for BranchListComponent {
 						drop(opts);
 						if let Some(b_index) = b_index {
 							self.selection = b_index as u16;
-							self.switch_to_selected_branch()?;
+							self.action_on_selected_branch()?;
 						}
 					}
 					return Ok(EventState::Consumed);
@@ -324,7 +332,7 @@ impl Component for BranchListComponent {
 				try_or_popup!(
 					self,
 					"switch branch error:",
-					self.switch_to_selected_branch()
+					self.action_on_selected_branch()
 				);
 			} else if key_match(e, self.key_config.keys.create_branch)
 				&& self.local
@@ -466,6 +474,8 @@ impl BranchListComponent {
 			repo,
 			shortcut_state: ShortcutState::Idle,
 			options,
+			mode: Mode::Checkout,
+			response_queue: None,
 		}
 	}
 
@@ -505,7 +515,22 @@ impl BranchListComponent {
 	}
 
 	///
+	pub fn open_to_pick(
+		&mut self,
+		q: SharedLocalQueue,
+	) -> Result<()> {
+		self.mode = Mode::Pick;
+		self.response_queue = Some(q);
+		self.show()?;
+		self.update_branches()?;
+
+		Ok(())
+	}
+
+	///
 	pub fn open(&mut self) -> Result<()> {
+		self.mode = Mode::Checkout;
+		self.response_queue = None;
 		self.show()?;
 		self.update_branches()?;
 
@@ -837,10 +862,34 @@ impl BranchListComponent {
 	}
 
 	///
-	fn switch_to_selected_branch(&mut self) -> Result<()> {
+	fn pick_selected_branch(&mut self) -> Result<()> {
+		if let Some(q) = self.response_queue.as_mut() {
+			let branch =
+				self.branches[self.selection as usize].clone();
+			q.borrow_mut().push_back(LocalEvent::PickBranch(branch));
+		}
+
+		self.response_queue = None;
+		self.hide();
+		Ok(())
+	}
+
+	fn action_on_selected_branch(&mut self) -> Result<()> {
 		if !self.valid_selection() {
 			anyhow::bail!("no valid branch selected");
 		}
+
+		match self.mode {
+			Mode::Checkout => self.switch_to_selected_branch()?,
+			Mode::Pick => self.pick_selected_branch()?,
+		}
+
+		self.queue.push(InternalEvent::Update(NeedsUpdate::ALL));
+		Ok(())
+	}
+
+	///
+	fn switch_to_selected_branch(&mut self) -> Result<()> {
 		let cmd = self
 			.options
 			.borrow()
@@ -889,9 +938,6 @@ impl BranchListComponent {
 				self.update_branches()?;
 			}
 		}
-
-		self.queue.push(InternalEvent::Update(NeedsUpdate::ALL));
-
 		Ok(())
 	}
 
