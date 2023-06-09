@@ -290,7 +290,7 @@ impl CommitList {
 		let repo = self.repo.borrow();
 		//save current head
 		for i in &self.marked {
-			if let Err(err) = cherrypick(&repo, i.1.clone()) {
+			if let Err(err) = cherrypick(&repo, i.1.clone(), true) {
 				//rollback
 				//show error
 				self.queue.push(
@@ -307,6 +307,7 @@ impl CommitList {
 			}
 		}
 		self.marked.clear();
+		self.queue.push(InternalEvent::Update(NeedsUpdate::ALL));
 	}
 
 	///

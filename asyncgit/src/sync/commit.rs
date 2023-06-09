@@ -6,22 +6,66 @@ use crate::{
 use git2::{ErrorCode, ObjectType, Repository, Signature};
 use scopetime::scope_time;
 
+struct CleanupState<'a> {
+	pub repo: &'a Repository,
+}
+
+impl<'a> Drop for CleanupState<'a> {
+	fn drop(&mut self) {
+		if let Err(e) = self.repo.cleanup_state() {
+			panic!("Cleaning up git state has utterly failed! {}", e);
+		}
+	}
+}
+
 ///
 pub fn cherrypick(
 	repo_path: &RepoPath,
 	id: CommitId,
+	add_source: bool,
 ) -> Result<CommitId> {
 	scope_time!("cherrypick");
 
 	let repo = repo(repo_path)?;
+	let signature = signature_allow_undefined_name(&repo)?;
 	let commit = repo.find_commit(id.into())?;
-	if let Err(e) = repo.cherrypick(&commit, None) {
-		//don't stay in some intermediate state
-		repo.cleanup_state()?;
-		return Err(e.into());
-	}
-	let id = repo.head()?.peel_to_commit()?.id().clone();
-	Ok(id.into())
+	let _cleanup = CleanupState { repo: &repo };
+	repo.cherrypick(&commit, None)?;
+	let custom_message: String;
+	let msg = if add_source {
+		custom_message = format!(
+			"{}\n\ncherrypicked from {}",
+			commit.message().unwrap_or(""),
+			commit.id().to_string()
+		);
+		custom_message.as_str()
+	} else {
+		commit.message().unwrap_or("")
+	};
+
+	let mut index = repo.index()?;
+	let tree_id = index.write_tree()?;
+	let tree = repo.find_tree(tree_id)?;
+
+	let parents = if let Ok(id) = get_head_repo(&repo) {
+		vec![repo.find_commit(id.into())?]
+	} else {
+		Vec::new()
+	};
+
+	let parents = parents.iter().collect::<Vec<_>>();
+	let auth = commit.author();
+
+	Ok(repo
+		.commit(
+			Some("HEAD"),
+			&auth,
+			&signature,
+			msg,
+			&tree,
+			parents.as_slice(),
+		)?
+		.into())
 }
 
 ///
