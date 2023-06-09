@@ -488,6 +488,18 @@ pub mod commands {
 			CMD_GROUP_GENERAL,
 		)
 	}
+	pub fn clear_git_cmd(
+		key_config: &SharedKeyConfig,
+	) -> CommandText {
+		CommandText::new(
+			format!(
+				"Remove Git Command [{}]",
+				key_config.get_hint(key_config.keys.clear_shortcut)
+			),
+			"clear external git command",
+			CMD_GROUP_GENERAL,
+		)
+	}
 	pub fn clear_all_shortcuts(
 		key_config: &SharedKeyConfig,
 	) -> CommandText {
@@ -1194,6 +1206,19 @@ pub mod commands {
 			),
 			"commit (available when commit message is non-empty)",
 			CMD_GROUP_COMMIT_POPUP,
+		)
+		.hide_help()
+	}
+	pub fn edit_save_enter(
+		key_config: &SharedKeyConfig,
+	) -> CommandText {
+		CommandText::new(
+			format!(
+				"Edit/Save Git Command [{}]",
+				key_config.get_hint(key_config.keys.enter),
+			),
+			"edit/save git command",
+			CMD_GROUP_GENERAL,
 		)
 		.hide_help()
 	}

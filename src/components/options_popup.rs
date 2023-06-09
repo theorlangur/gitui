@@ -525,6 +525,30 @@ impl OptionsPopupComponent {
 				self.git_cmd_selection.prev();
 			} else if key_match(key, self.key_config.keys.move_down) {
 				self.git_cmd_selection.next();
+			} else if key_match(
+				key,
+				self.key_config.keys.clear_shortcut,
+			) {
+				match self.git_cmd_selection {
+					GitCmdOption::GitPush => {
+						self.input_git_push.clear();
+						self.options
+							.borrow_mut()
+							.set_git_extern_push(None);
+					}
+					GitCmdOption::GitFetch => {
+						self.input_git_fetch.clear();
+						self.options
+							.borrow_mut()
+							.set_git_extern_fetch(None);
+					}
+					GitCmdOption::GitCheckout => {
+						self.input_git_checkout.clear();
+						self.options
+							.borrow_mut()
+							.set_git_extern_checkout(None);
+					}
+				};
 			}
 		}
 
@@ -606,6 +630,30 @@ impl Component for OptionsPopupComponent {
 				)
 				.order(1),
 			);
+
+			if self.current_tab == TabType::GitCmds {
+				out.push(
+					CommandInfo::new(
+						strings::commands::edit_save_enter(
+							&self.key_config,
+						),
+						true,
+						true,
+					)
+					.order(1),
+				);
+
+				out.push(
+					CommandInfo::new(
+						strings::commands::clear_git_cmd(
+							&self.key_config,
+						),
+						true,
+						true,
+					)
+					.order(1),
+				);
+			}
 		}
 
 		visibility_blocking(self)
