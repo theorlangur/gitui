@@ -4,7 +4,10 @@ use crate::{
 		CommandInfo, Component, DrawableComponent, EventState,
 	},
 	keys::{key_match, SharedKeyConfig},
-	queue::{Action, InternalEvent, Queue},
+	queue::{
+		Action, CustomConfirmData, InternalEvent, LocalEvent,
+		NeedsUpdate, Queue,
+	},
 	strings, ui,
 };
 use anyhow::Result;
@@ -22,6 +25,8 @@ pub struct ConfirmComponent {
 	queue: Queue,
 	theme: SharedTheme,
 	key_config: SharedKeyConfig,
+
+	custom: Option<CustomConfirmData>,
 }
 
 impl DrawableComponent for ConfirmComponent {
@@ -114,18 +119,36 @@ impl ConfirmComponent {
 			queue,
 			theme,
 			key_config,
+
+			custom: None,
 		}
 	}
 	///
 	pub fn open(&mut self, a: Action) -> Result<()> {
 		self.target = Some(a);
+		self.custom = None;
+		self.show()?;
+
+		Ok(())
+	}
+	///
+	pub fn open_custom(
+		&mut self,
+		c: CustomConfirmData,
+	) -> Result<()> {
+		self.target = None;
+		self.custom = Some(c);
 		self.show()?;
 
 		Ok(())
 	}
 	///
 	pub fn confirm(&mut self) {
-		if let Some(a) = self.target.take() {
+		if let Some(c) = self.custom.as_mut() {
+			let mut q = c.q.borrow_mut();
+			q.push_back(LocalEvent::Confirmed(c.confirm.clone()));
+			self.queue.push(InternalEvent::Update(NeedsUpdate::ALL));
+		} else if let Some(a) = self.target.take() {
 			self.queue.push(InternalEvent::ConfirmedAction(a));
 		}
 
@@ -133,6 +156,9 @@ impl ConfirmComponent {
 	}
 
 	fn get_text(&self) -> (String, String) {
+		if let Some(c) = self.custom.as_ref() {
+			return (c.title.clone(), c.msg.clone());
+		}
 		if let Some(ref a) = self.target {
 			return match a {
                 Action::Reset(_) => (

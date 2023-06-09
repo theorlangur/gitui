@@ -30,6 +30,7 @@ bitflags! {
 
 pub enum LocalEvent {
 	PickBranch(BranchInfo),
+	Confirmed(String),
 }
 
 pub type LocalQueue = VecDeque<LocalEvent>;
@@ -81,8 +82,17 @@ pub enum StackablePopupOpen {
 	CopyClipboardCommit(CopyClipboardOpen),
 }
 
+pub struct CustomConfirmData {
+	pub title: String,
+	pub msg: String,
+	pub confirm: String,
+	pub q: SharedLocalQueue,
+}
+
 ///
 pub enum InternalEvent {
+	///
+	ConfirmCustom(CustomConfirmData),
 	///
 	ConfirmAction(Action),
 	///

@@ -100,6 +100,9 @@ impl RevlogExtern {
 				LocalEvent::PickBranch(b) => self
 					.compare_log
 					.set_target_branch(Some((b.name, b.top_commit))),
+				_ => {
+					panic!("Unexpected local event");
+				}
 			}
 		}
 	}

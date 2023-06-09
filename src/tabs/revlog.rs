@@ -209,6 +209,7 @@ impl Revlog {
 					&tags,
 				)?;
 			}
+			self.list.update()?;
 		}
 
 		Ok(())

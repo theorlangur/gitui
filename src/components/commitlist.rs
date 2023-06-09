@@ -2,7 +2,10 @@ use super::filter_options::FilterOptionsPopupComponent;
 use super::search_options::SearchOptionsPopupComponent;
 use super::utils::logitems::{ItemBatch, LogEntry};
 use super::TextInputComponent;
-use crate::queue::{InternalEvent, NeedsUpdate};
+use crate::queue::{
+	create_local_queue, CustomConfirmData, InternalEvent, LocalEvent,
+	NeedsUpdate, SharedLocalQueue,
+};
 use crate::{
 	components::{
 		utils::string_width_align, CommandBlocking, CommandInfo,
@@ -17,9 +20,10 @@ use crate::{
 };
 use anyhow::Result;
 use asyncgit::sync::{
-	checkout_commit, BranchDetails, BranchInfo, CommitId,
+	checkout_commit, cherrypick, BranchDetails, BranchInfo, CommitId,
 	LogWalkerFilter, RepoPathRef, Tags,
 };
+
 use chrono::{DateTime, Local};
 use crossterm::event::Event;
 use itertools::Itertools;
@@ -88,6 +92,7 @@ pub struct CommitList {
 	extended_search_request: ExternalSearchRequest,
 	last_selected_commit: Option<CommitId>,
 	external_focus: bool,
+	local_queue: SharedLocalQueue,
 }
 
 impl CommitList {
@@ -148,6 +153,41 @@ impl CommitList {
 			extended_search_request: ExternalSearchRequest::Empty,
 			last_selected_commit: None,
 			external_focus: true,
+			local_queue: create_local_queue(),
+		}
+	}
+
+	///
+	pub fn update(&mut self) -> Result<()> {
+		self.process_local_queue();
+		Ok(())
+	}
+
+	fn process_local_queue(&mut self) {
+		loop {
+			//suboptimal...
+			let mut q = self.local_queue.borrow_mut();
+			let e = q.pop_front();
+			drop(q);
+			if let Some(e) = e {
+				match e {
+					LocalEvent::Confirmed(s) => {
+						if s == "cherrypick" {
+							self.cherrypick_marked();
+						} else {
+							panic!(
+								"Unexpected confirmation for {}",
+								s
+							);
+						}
+					}
+					_ => {
+						panic!("Unexpected local event");
+					}
+				}
+			} else {
+				break;
+			}
 		}
 	}
 
@@ -243,6 +283,30 @@ impl CommitList {
 		} else {
 			None
 		}
+	}
+
+	fn cherrypick_marked(&mut self) {
+		//implement
+		let repo = self.repo.borrow();
+		//save current head
+		for i in &self.marked {
+			if let Err(err) = cherrypick(&repo, i.1.clone()) {
+				//rollback
+				//show error
+				self.queue.push(
+					crate::queue::InternalEvent::ShowErrorMsg(
+						format!(
+							"{}\n{}",
+							"Could not perform cherrypick(s)", err
+						),
+					),
+				);
+				self.queue
+					.push(InternalEvent::Update(NeedsUpdate::ALL));
+				return;
+			}
+		}
+		self.marked.clear();
 	}
 
 	///
@@ -878,6 +942,27 @@ impl CommitList {
 					self.key_config.keys.log_mark_commit,
 				) {
 					self.mark();
+					true
+				} else if key_match(
+					k,
+					self.key_config.keys.cherrypick,
+				) {
+					if self.marked.is_empty() {
+						self.queue.push(InternalEvent::ShowErrorMsg(
+							String::from(
+								"No commits selected to cherrypick",
+							),
+						));
+					} else {
+						self.queue.push(InternalEvent::ConfirmCustom(
+							CustomConfirmData{
+								title: "Cherrypick?".to_string(), 
+								msg: "Do you want to cherry pick marked commits?".to_string(), 
+								confirm:"cherrypick".to_string(), 
+								q:self.local_queue.clone()
+							})
+							);
+					}
 					true
 				} else if key_match(
 					k,

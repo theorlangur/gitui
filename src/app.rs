@@ -860,6 +860,10 @@ impl App {
 	) -> Result<NeedsUpdate> {
 		let mut flags = NeedsUpdate::empty();
 		match ev {
+			InternalEvent::ConfirmCustom(c) => {
+				self.reset.open_custom(c)?;
+				flags.insert(NeedsUpdate::COMMANDS);
+			}
 			InternalEvent::ConfirmedAction(action) => {
 				self.process_confirmed_action(action, &mut flags)?;
 			}
