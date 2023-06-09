@@ -11,11 +11,15 @@ pub fn cherrypick(
 	repo_path: &RepoPath,
 	id: CommitId,
 ) -> Result<CommitId> {
-	scope_time!("amend");
+	scope_time!("cherrypick");
 
 	let repo = repo(repo_path)?;
 	let commit = repo.find_commit(id.into())?;
-	repo.cherrypick(&commit, None)?;
+	if let Err(e) = repo.cherrypick(&commit, None) {
+		//don't stay in some intermediate state
+		repo.cleanup_state()?;
+		return Err(e.into());
+	}
 	let id = repo.head()?.peel_to_commit()?.id().clone();
 	Ok(id.into())
 }
