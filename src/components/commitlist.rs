@@ -20,11 +20,11 @@ use crate::{
 };
 use anyhow::Result;
 use asyncgit::sync::{
-	checkout_commit, cherrypick, BranchDetails, BranchInfo, CommitId,
-	LogWalkerFilter, RepoPathRef, Tags,
+	checkout_commit, cherrypick, get_commit_info, BranchDetails,
+	BranchInfo, CommitId, LogWalkerFilter, RepoPathRef, Tags,
 };
 
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Local, NaiveDateTime};
 use crossterm::event::Event;
 use itertools::Itertools;
 use ratatui::layout::{Constraint, Layout};
@@ -853,6 +853,27 @@ impl CommitList {
 		v
 	}
 
+	fn get_commit_short_summary(
+		&self,
+		c: &CommitId,
+	) -> Result<String> {
+		let info = get_commit_info(&self.repo.borrow(), c)?;
+		let date =
+			NaiveDateTime::from_timestamp_opt(info.time, 0).unwrap();
+		const MAX_MSG_SIZE: usize = 28;
+		const MAX_AUTHOR_SIZE: usize = 12;
+		let msg_size = info.message.len().min(MAX_MSG_SIZE);
+		let author_size = info.author.len().min(MAX_AUTHOR_SIZE);
+		Ok(format!(
+			"{} {} {:MAX_AUTHOR_SIZE$} '{}'",
+			c.get_short_string(),
+			date,
+			&info.author[..author_size],
+			&info.message[..msg_size]
+		)
+		.replace("\n", " "))
+	}
+
 	fn list_event(&mut self, ev: &Event) -> Result<EventState> {
 		if let Event::Key(k) = ev {
 			match self.combo_state {
@@ -955,14 +976,38 @@ impl CommitList {
 							),
 						));
 					} else {
-						self.queue.push(InternalEvent::ConfirmCustom(
-							CustomConfirmData{
-								title: "Cherrypick?".to_string(), 
-								msg: "Do you want to cherry pick marked commits?".to_string(), 
-								confirm:"cherrypick".to_string(), 
-								q:self.local_queue.clone()
+						const SUMMARY_COMMIT_COUNT: usize = 4;
+						let mut commit_summary = self
+							.marked
+							.iter()
+							.take(SUMMARY_COMMIT_COUNT)
+							.map(|i| {
+								self.get_commit_short_summary(&i.1)
+									.ok()
+									.unwrap_or_default()
 							})
+							.join("\n");
+						let rest_commits = self.marked.len()
+							- self
+								.marked
+								.len()
+								.min(SUMMARY_COMMIT_COUNT);
+						if rest_commits > 0 {
+							commit_summary += &format!(
+								"\nand {} more commits",
+								rest_commits
 							);
+						}
+						self.queue.push(
+							InternalEvent::ConfirmCustom(
+								CustomConfirmData {
+									title: "Cherrypick?".to_string(),
+									msg: commit_summary,
+									confirm: "cherrypick".to_string(),
+									q: self.local_queue.clone(),
+								},
+							),
+						);
 					}
 					true
 				} else if key_match(
