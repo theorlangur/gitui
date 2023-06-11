@@ -13,6 +13,7 @@ mod commits_info;
 mod config;
 pub mod cred;
 pub mod diff;
+pub mod extern_git;
 mod hooks;
 mod hunks;
 mod ignore;

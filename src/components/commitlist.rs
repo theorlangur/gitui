@@ -967,6 +967,23 @@ impl CommitList {
 					true
 				} else if key_match(
 					k,
+					self.key_config.keys.delete_generic,
+				) {
+					if self.marked.is_empty() {
+						self.queue.push(InternalEvent::ShowErrorMsg(
+							String::from(
+								"No commits selected to cherrypick",
+							),
+						));
+					} else {
+						asyncgit::sync::extern_git::rebase_interactive(
+						self.repo.borrow().gitpath().to_str().unwrap(),
+						"HEAD",
+					)?;
+					}
+					true
+				} else if key_match(
+					k,
 					self.key_config.keys.cherrypick,
 				) {
 					if self.marked.is_empty() {

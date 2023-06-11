@@ -30,6 +30,9 @@ url = "2.3"
 ssh2-config = "^0.2.0"
 git-url-parse = "0.4.4"
 dirs-next = "2.0"
+raw_sync = "^0.1.5"
+shared_memory = "^0.12.4"
+anyhow = "1.0"
 
 [dev-dependencies]
 env_logger = "0.10"

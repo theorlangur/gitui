@@ -125,7 +125,64 @@ enum Updater {
 	NotifyWatcher,
 }
 
+fn dummy_mode() -> Result<()> {
+	enum ArgState {
+		None,
+		EventId,
+		Type,
+	}
+
+	let mut s = ArgState::None;
+	let mut event_id = String::new();
+	let mut dummy_type = String::new();
+	let args = std::env::args();
+	let file_path = std::env::args()
+		.by_ref()
+		.last()
+		.ok_or(std::io::Error::from(std::io::ErrorKind::NotFound))?;
+	for arg in args {
+		s = match s {
+			ArgState::EventId => {
+				event_id = arg;
+				ArgState::None
+			}
+			ArgState::Type => {
+				dummy_type = arg;
+				ArgState::None
+			}
+			ArgState::None => {
+				if arg == "--event_id" {
+					ArgState::EventId
+				} else if arg == "--type" {
+					ArgState::Type
+				} else {
+					ArgState::None
+				}
+			}
+		}
+	}
+
+	if event_id.is_empty() {
+		anyhow::bail!("Missing --event_id");
+	}
+	if dummy_type.is_empty() {
+		anyhow::bail!("Missing --type");
+	}
+	std::fs::write(
+		"dummy_res.txt",
+		format!(
+			"EventId={}\nDummyType={}\nFile={}",
+			event_id, dummy_type, file_path
+		),
+	)?;
+	Ok(())
+}
+
 fn main() -> Result<()> {
+	if let Some(_) = std::env::args().find(|i| i == "--event_id") {
+		return dummy_mode();
+	}
+
 	let app_start = Instant::now();
 
 	let cliargs = process_cmdline()?;
