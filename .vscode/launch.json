@@ -9,7 +9,14 @@
             //"terminal": "external",
             //"console": "externalTerminal",
             "args": [],
-            "cwd": "${workspaceRoot}",
+            //[
+            //"--event_id",
+            //"2233",
+            //"--type",
+            //"rebase"
+            //],
+            //"cwd": "${workspaceRoot}",
+            "cwd": "/home/orlangur/myapps/rust/repotest",
         }
     ]
 }
