@@ -1,7 +1,10 @@
 //! sync api for executing external git commands
 
 use anyhow::{anyhow, Result};
-use std::{os::unix::prelude::PermissionsExt, process::Command};
+use std::{
+	os::unix::prelude::PermissionsExt,
+	process::{Command, Stdio},
+};
 
 ///
 pub fn rebase_interactive(repo: &str, base: &str) -> Result<()> {
@@ -33,8 +36,12 @@ pub fn rebase_interactive(repo: &str, base: &str) -> Result<()> {
 		))
 		.arg("rebase")
 		.arg("-i")
-		.arg(base);
+		.arg(base)
+		.stdout(Stdio::null()) //muting output. TODO: redirect?
+		.stderr(Stdio::null());
+	//TODO: here we need to PREPARE machinery with shared memory, events, and so on...
 	let mut child = cmd.spawn()?;
+	//TODO: here goes the usage of machinery with shared memory, events, and so on...
 	child.wait()?;
 	std::fs::remove_file(cache_path)?;
 	Ok(())
