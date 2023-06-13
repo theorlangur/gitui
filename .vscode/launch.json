@@ -17,6 +17,24 @@
             //],
             //"cwd": "${workspaceRoot}",
             "cwd": "/home/orlangur/myapps/rust/repotest",
+        },
+        {
+            "name": "Launch Sequence editor",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceRoot}/target/debug/gitui",
+            //"terminal": "external",
+            //"console": "externalTerminal",
+            "args": //[],
+            [
+                "--event_id",
+                "4956",
+                "--type",
+                "rebase",
+                "/home/orlangur/myapps/rust/todo_file_path"
+            ],
+            //"cwd": "${workspaceRoot}",
+            "cwd": "/home/orlangur/myapps/rust/repotest",
         }
     ]
 }
