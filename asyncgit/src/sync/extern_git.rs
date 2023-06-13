@@ -158,10 +158,11 @@ impl IPCEvents {
 				self.shared_mem
 					.as_ptr()
 					.offset(self.str_offset as isize) as *const usize;
-			let str_bytes = &self.shared_mem.as_slice()[self
-				.str_offset
-				+ std::mem::size_of::<usize>()
-				..*str_len];
+			let str_bytes_from =
+				self.str_offset + std::mem::size_of::<usize>();
+			let str_bytes_to = str_bytes_from + *str_len;
+			let str_bytes = &self.shared_mem.as_slice()
+				[str_bytes_from..str_bytes_to];
 			std::str::from_utf8(str_bytes).unwrap_or("").to_string()
 		}
 	}
@@ -181,10 +182,11 @@ impl IPCEvents {
 					.as_ptr()
 					.offset(self.str_offset as isize) as *mut usize;
 			*str_len = s.len();
-			let str_bytes = &mut self.shared_mem.as_slice_mut()[self
-				.str_offset
-				+ std::mem::size_of::<usize>()
-				..*str_len];
+			let str_bytes_from =
+				self.str_offset + std::mem::size_of::<usize>();
+			let str_bytes_to = str_bytes_from + *str_len;
+			let str_bytes = &mut self.shared_mem.as_slice_mut()
+				[str_bytes_from..str_bytes_to];
 			str_bytes.clone_from_slice(s.as_bytes());
 		}
 		Ok(())
@@ -214,7 +216,8 @@ pub fn rebase_interactive(repo: &str, base: &str) -> Result<()> {
 	let mut child = cmd.spawn()?;
 	events
 		.connected_ready
-		.wait(Timeout::Val(Duration::from_millis(5000)))
+		//.wait(Timeout::Val(Duration::from_millis(5000)))
+		.wait(Timeout::Infinite)
 		.map_err(|e| {
 			anyhow!("Waiting for a sequence editor to start failed with {}", e)
 		})?;
