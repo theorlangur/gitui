@@ -19,6 +19,21 @@ impl<'a> Drop for CleanupState<'a> {
 }
 
 ///
+pub fn parent_ids(
+	repo_path: &RepoPath,
+	c: CommitId,
+) -> Result<Vec<CommitId>> {
+	let repo = repo(repo_path)?;
+	let res = repo
+		.find_commit(c.into())
+		.unwrap()
+		.parent_ids()
+		.map(CommitId::from)
+		.collect();
+	Ok(res)
+}
+
+///
 pub fn cherrypick(
 	repo_path: &RepoPath,
 	id: CommitId,

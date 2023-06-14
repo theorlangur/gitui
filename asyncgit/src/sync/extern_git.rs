@@ -2,6 +2,7 @@
 
 use anyhow::{anyhow, Result};
 use std::{
+	collections::HashSet,
 	os::unix::prelude::PermissionsExt,
 	path::PathBuf,
 	process::{Command, Stdio},
@@ -10,6 +11,8 @@ use std::{
 
 use raw_sync::{events::*, Timeout};
 use shared_memory::*;
+
+use super::CommitId;
 
 struct TempEditor<'a> {
 	cache_path: PathBuf,
@@ -71,7 +74,7 @@ impl<'a> TempEditor<'a> {
 
 impl<'a> Drop for TempEditor<'a> {
 	fn drop(&mut self) {
-		if let Err(e) =
+		if let Err(_) =
 			std::fs::remove_file(self.cache_path.as_path())
 		{
 			//log somehow
@@ -89,6 +92,11 @@ pub struct IPCEvents {
 
 	str_offset: usize,
 }
+impl Drop for IPCEvents {
+	fn drop(&mut self) {
+		if let Err(_) = self.signal_connected_shutdown() {}
+	}
+}
 
 impl IPCEvents {
 	const SHMEM_SIZE: usize = 4096;
@@ -96,7 +104,7 @@ impl IPCEvents {
 	pub fn main(event_id: &str) -> Result<Self> {
 		let shmem = ShmemConf::new()
 			.size(Self::SHMEM_SIZE)
-			.flink(format!("gitui_{}", event_id))
+			.os_id(format!("gitui_{}", event_id))
 			.create()?;
 		let ready_res = unsafe { Event::new(shmem.as_ptr(), true) };
 		let (e_ready, e_ready_size) = ready_res.map_err(|e| {
@@ -124,8 +132,8 @@ impl IPCEvents {
 	///connect to already existing shared memory and events
 	pub fn connected(event_id: &str) -> Result<Self> {
 		let shmem = ShmemConf::new()
-			.size(4096)
-			.flink(format!("gitui_{}", event_id))
+			.size(Self::SHMEM_SIZE)
+			.os_id(format!("gitui_{}", event_id))
 			.open()?;
 		let ready_res =
 			unsafe { Event::from_existing(shmem.as_ptr()) };
@@ -149,6 +157,48 @@ impl IPCEvents {
 			connected_shutdown: e_shutdown,
 			str_offset: e_ready_size + e_shutdown_size,
 		})
+	}
+
+	///wait until connected app is connected and ready
+	pub fn wait_connected_ready(&self) -> Result<()> {
+		self.connected_ready
+			.wait(Timeout::Val(Duration::from_millis(5000)))
+			//.wait(Timeout::Infinite)
+			.map_err(|e| {
+				anyhow!("Waiting for a sequence editor to start failed with {}", e)
+			})?;
+		Ok(())
+	}
+
+	///signal the main app that the connected is ready
+	pub fn signal_connected_ready(&self) -> Result<()> {
+		self.connected_ready.set(EventState::Signaled).map_err(
+			|e| anyhow!("Could not signal 'ready' event: {}", e),
+		)?;
+		Ok(())
+	}
+
+	///signal the other side that it can shutdown
+	pub fn signal_connected_shutdown(&self) -> Result<()> {
+		self.connected_shutdown.set(EventState::Signaled).map_err(
+			|e| {
+				anyhow!(
+					"Signaling to editor to shutdown failed with {}",
+					e
+				)
+			},
+		)?;
+		Ok(())
+	}
+
+	///wait till connected_shutdown is signaled
+	pub fn wait_shutdown(&self) -> Result<()> {
+		self.connected_shutdown
+			.wait(raw_sync::Timeout::Infinite)
+			.map_err(|e| {
+				anyhow!("Failed to wait for 'shutdown' event: {}", e)
+			})?;
+		Ok(())
 	}
 
 	///obtain a copy of the string written right after 2 event objects in the shared memory
@@ -194,7 +244,14 @@ impl IPCEvents {
 }
 
 ///
-pub fn rebase_interactive(repo: &str, base: &str) -> Result<()> {
+pub fn rebase_interactive<F>(
+	repo: &str,
+	base: &str,
+	f: F,
+) -> Result<()>
+where
+	F: Fn(&str) -> Result<()>,
+{
 	let event_id = format!("{}", std::process::id());
 	let mut sequence_editor = TempEditor::new(event_id.as_str());
 	sequence_editor.create()?;
@@ -206,6 +263,8 @@ pub fn rebase_interactive(repo: &str, base: &str) -> Result<()> {
 			"sequence.editor={}",
 			sequence_editor.to_str().unwrap(),
 		))
+		.arg("-c")
+		.arg("rebase.instructionFormat=\"%H\"")
 		.arg("rebase")
 		.arg("-i")
 		.arg(base)
@@ -214,26 +273,190 @@ pub fn rebase_interactive(repo: &str, base: &str) -> Result<()> {
 
 	let events = IPCEvents::main(&event_id)?;
 	let mut child = cmd.spawn()?;
-	events
-		.connected_ready
-		//.wait(Timeout::Val(Duration::from_millis(5000)))
-		.wait(Timeout::Infinite)
-		.map_err(|e| {
-			anyhow!("Waiting for a sequence editor to start failed with {}", e)
-		})?;
+	events.wait_connected_ready()?;
 	let todo_file = events.get_str();
-	//TODO: here goes the usage of machinery with shared memory, events, and so on...
-
-	//TODO: somewhere here we're ready and need to tell the editor to shutdown
-	events
-		.connected_shutdown
-		.set(EventState::Signaled)
-		.map_err(|e| {
-			anyhow!(
-				"Signaling to editor to shutdown failed with {}",
-				e
-			)
-		})?;
+	f(&todo_file)?;
+	events.signal_connected_shutdown()?;
 	child.wait()?;
+	Ok(())
+}
+
+///
+pub fn rebase_drop_commits(
+	repo: &str,
+	commits: Vec<&CommitId>,
+	base: &CommitId,
+) -> Result<()> {
+	let hashed_commits = commits
+		.iter()
+		.map(|i| i.to_string())
+		.collect::<HashSet<String>>();
+	rebase_interactive(
+		repo,
+		base.to_string().as_str(),
+		|todo_file| {
+			let rebase_commits: Vec<_> =
+				parse_rebase_todo(todo_file)?
+					.into_iter()
+					.map(|i| {
+						if hashed_commits.contains(&i.full_hash) {
+							i.change_op(InteractiveOperation::Drop)
+						} else {
+							i
+						}
+					})
+					.collect();
+			write_rebase_todo(todo_file, rebase_commits)?;
+			Ok(())
+		},
+	)?;
+	Ok(())
+}
+
+///
+pub enum InteractiveOperation {
+	///
+	Pick,
+	///
+	Reword,
+	///
+	Edit,
+	///
+	Squash,
+	///
+	Fixup,
+	///
+	Exec,
+	///
+	Break,
+	///
+	Drop,
+	///
+	Label,
+	///
+	Reset,
+	///
+	Merge,
+	///
+	UpdateRef,
+}
+
+impl InteractiveOperation {
+	///
+	pub fn try_parse(w: &str) -> Result<InteractiveOperation> {
+		match w {
+			"pick" | "p" => Ok(InteractiveOperation::Pick),
+			"reword" | "r" => Ok(InteractiveOperation::Reword),
+			"edit" | "e" => Ok(InteractiveOperation::Edit),
+			"squash" | "s" => Ok(InteractiveOperation::Squash),
+			"fixup" | "f" => Ok(InteractiveOperation::Fixup),
+			"exec" | "x" => Ok(InteractiveOperation::Exec),
+			"break" | "b" => Ok(InteractiveOperation::Break),
+			"drop" | "d" => Ok(InteractiveOperation::Drop),
+			"label" | "l" => Ok(InteractiveOperation::Label),
+			"reset" | "t" => Ok(InteractiveOperation::Reset),
+			"merge" | "m" => Ok(InteractiveOperation::Merge),
+			"update-ref" | "u" => Ok(InteractiveOperation::UpdateRef),
+			_ => Err(anyhow!("Unknown operation: {}", w)),
+		}
+	}
+
+	///
+	pub fn to_string(&self) -> String {
+		match self {
+			InteractiveOperation::Pick => "pick".to_owned(),
+			InteractiveOperation::Reword => "reword".to_owned(),
+			InteractiveOperation::Edit => "edit".to_owned(),
+			InteractiveOperation::Squash => "squash".to_owned(),
+			InteractiveOperation::Fixup => "fixup".to_owned(),
+			InteractiveOperation::Exec => "exec".to_owned(),
+			InteractiveOperation::Break => "break".to_owned(),
+			InteractiveOperation::Drop => "drop".to_owned(),
+			InteractiveOperation::Label => "label".to_owned(),
+			InteractiveOperation::Reset => "reset".to_owned(),
+			InteractiveOperation::Merge => "merge".to_owned(),
+			InteractiveOperation::UpdateRef => {
+				"update-ref".to_owned()
+			}
+		}
+	}
+}
+
+///
+pub struct RebaseCommit {
+	op: InteractiveOperation,
+	hash: String,
+	full_hash: String,
+}
+
+impl RebaseCommit {
+	///
+	pub fn change_op(self, op: InteractiveOperation) -> Self {
+		Self {
+			op,
+			hash: self.hash,
+			full_hash: self.full_hash,
+		}
+	}
+
+	///
+	pub fn try_parse(l: &str) -> Result<RebaseCommit> {
+		let mut i = l.split_ascii_whitespace();
+		let op = if let Some(w) = i.next() {
+			InteractiveOperation::try_parse(w)
+		} else {
+			Err(anyhow!("no op"))
+		}?;
+		let hash = if let Some(h) = i.next() {
+			Ok(h.to_string())
+		} else {
+			Err(anyhow!("no short hash"))
+		}?;
+		let full_hash = if let Some(h) = i.next() {
+			Ok(h.trim_matches('"').to_string())
+		} else {
+			Err(anyhow!("no full hash"))
+		}?;
+
+		Ok(RebaseCommit {
+			op,
+			hash,
+			full_hash,
+		})
+	}
+
+	///
+	pub fn to_string(&self) -> String {
+		format!(
+			"{} {} \"{}\"",
+			self.op.to_string(),
+			self.hash,
+			self.full_hash
+		)
+	}
+}
+
+///
+pub fn parse_rebase_todo(f: &str) -> Result<Vec<RebaseCommit>> {
+	let r: Vec<_> = std::fs::read_to_string(f)?
+		.lines()
+		.filter_map(|i| RebaseCommit::try_parse(i).ok())
+		.collect();
+	Ok(r)
+}
+
+///
+pub fn write_rebase_todo(
+	f: &str,
+	commits: Vec<RebaseCommit>,
+) -> Result<()> {
+	std::fs::write(
+		f,
+		commits
+			.iter()
+			.map(|i| i.to_string())
+			.collect::<Vec<_>>()
+			.join("\n"),
+	)?;
 	Ok(())
 }

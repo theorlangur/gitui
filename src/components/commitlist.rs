@@ -171,15 +171,13 @@ impl CommitList {
 			drop(q);
 			if let Some(e) = e {
 				match e {
-					LocalEvent::Confirmed(s) => {
-						if s == "cherrypick" {
-							self.cherrypick_marked();
-						} else {
-							panic!(
-								"Unexpected confirmation for {}",
-								s
-							);
-						}
+					LocalEvent::Confirmed(ref s)
+						if s == "cherrypick" =>
+					{
+						self.cherrypick_marked()
+					}
+					LocalEvent::Confirmed(ref s) if s == "drop" => {
+						self.drop_marked()
 					}
 					_ => {
 						panic!("Unexpected local event");
@@ -307,6 +305,36 @@ impl CommitList {
 			}
 		}
 		self.marked.clear();
+		self.queue.push(InternalEvent::Update(NeedsUpdate::ALL));
+	}
+
+	fn drop_marked(&mut self) {
+		let oldest_commit = self
+			.marked
+			.iter()
+			.max_by(|x, y| x.0.cmp(&y.0))
+			.unwrap()
+			.1
+			.clone();
+		let base: CommitId = asyncgit::sync::parent_ids(
+			&self.repo.borrow(),
+			oldest_commit,
+		)
+		.unwrap()[0];
+		let list: Vec<_> = self.marked.iter().map(|i| &i.1).collect();
+		if let Err(e) =
+			asyncgit::sync::extern_git::rebase_drop_commits(
+				self.repo.borrow().gitpath().to_str().unwrap(),
+				list,
+				&base,
+			) {
+			self.queue.push(InternalEvent::ShowErrorMsg(format!(
+				"Dropping commits failed: {}",
+				e
+			)));
+		} else {
+			self.marked.clear();
+		}
 		self.queue.push(InternalEvent::Update(NeedsUpdate::ALL));
 	}
 
@@ -874,6 +902,27 @@ impl CommitList {
 		.replace("\n", " "))
 	}
 
+	fn get_marked_summary(&self) -> String {
+		const SUMMARY_COMMIT_COUNT: usize = 4;
+		let mut commit_summary = self
+			.marked
+			.iter()
+			.take(SUMMARY_COMMIT_COUNT)
+			.map(|i| {
+				self.get_commit_short_summary(&i.1)
+					.ok()
+					.unwrap_or_default()
+			})
+			.join("\n");
+		let rest_commits = self.marked.len()
+			- self.marked.len().min(SUMMARY_COMMIT_COUNT);
+		if rest_commits > 0 {
+			commit_summary +=
+				&format!("\nand {} more commits", rest_commits);
+		}
+		commit_summary
+	}
+
 	fn list_event(&mut self, ev: &Event) -> Result<EventState> {
 		if let Event::Key(k) = ev {
 			match self.combo_state {
@@ -972,14 +1021,21 @@ impl CommitList {
 					if self.marked.is_empty() {
 						self.queue.push(InternalEvent::ShowErrorMsg(
 							String::from(
-								"No commits selected to cherrypick",
+								"No commits selected to drop",
 							),
 						));
 					} else {
-						asyncgit::sync::extern_git::rebase_interactive(
-						self.repo.borrow().gitpath().to_str().unwrap(),
-						"HEAD",
-					)?;
+						self.queue.push(
+							InternalEvent::ConfirmCustom(
+								CustomConfirmData {
+									title: "Drop commits?"
+										.to_string(),
+									msg: self.get_marked_summary(),
+									confirm: "drop".to_string(),
+									q: self.local_queue.clone(),
+								},
+							),
+						);
 					}
 					true
 				} else if key_match(
@@ -993,33 +1049,11 @@ impl CommitList {
 							),
 						));
 					} else {
-						const SUMMARY_COMMIT_COUNT: usize = 4;
-						let mut commit_summary = self
-							.marked
-							.iter()
-							.take(SUMMARY_COMMIT_COUNT)
-							.map(|i| {
-								self.get_commit_short_summary(&i.1)
-									.ok()
-									.unwrap_or_default()
-							})
-							.join("\n");
-						let rest_commits = self.marked.len()
-							- self
-								.marked
-								.len()
-								.min(SUMMARY_COMMIT_COUNT);
-						if rest_commits > 0 {
-							commit_summary += &format!(
-								"\nand {} more commits",
-								rest_commits
-							);
-						}
 						self.queue.push(
 							InternalEvent::ConfirmCustom(
 								CustomConfirmData {
 									title: "Cherrypick?".to_string(),
-									msg: commit_summary,
+									msg: self.get_marked_summary(),
 									confirm: "cherrypick".to_string(),
 									q: self.local_queue.clone(),
 								},

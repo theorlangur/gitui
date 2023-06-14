@@ -50,7 +50,7 @@ mod version;
 mod watcher;
 
 use crate::{app::App, args::process_cmdline};
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 use app::QuitState;
 use asyncgit::{
 	sync::{extern_git::IPCEvents, utils::repo_work_dir, RepoPath},
@@ -72,7 +72,6 @@ use ratatui::{
 	backend::{Backend, CrosstermBackend},
 	Terminal,
 };
-use raw_sync::events::EventState;
 use scopeguard::defer;
 use scopetime::scope_time;
 use spinner::Spinner;
@@ -171,29 +170,32 @@ fn dummy_mode() -> Result<()> {
 	}
 	let mut events = IPCEvents::connected(&event_id)?;
 	events.set_str(&file_path)?;
-	events
-		.connected_ready
-		.set(EventState::Signaled)
-		.map_err(|e| anyhow!("Could not signal 'ready' event"))?;
-	std::fs::write(
+	events.signal_connected_ready()?;
+
+	/*std::fs::write(
 		"dummy_res.txt",
 		format!(
 			"EventId={}\nDummyType={}\nFile={}",
 			event_id, dummy_type, file_path
 		),
-	)?;
-	events
-		.connected_shutdown
-		.wait(raw_sync::Timeout::Infinite)
-		.map_err(|e| {
-			anyhow!("Failed to wait for 'shutdown' event")
-		})?;
+	)?;*/
+
+	events.wait_shutdown()?;
 	Ok(())
 }
 
 fn main() -> Result<()> {
 	if let Some(_) = std::env::args().find(|i| i == "--event_id") {
-		return dummy_mode();
+		/*std::fs::write(
+			"dummy_begin.txt",
+			format!("{}", std::env::args().join("\n")),
+		)?;*/
+		if let Err(e) = dummy_mode() {
+			std::fs::write("dummy_err.txt", format!("{}", e))?;
+			return Err(e);
+		}
+		return Ok(());
+		//return dummy_mode();
 	}
 
 	let app_start = Instant::now();
