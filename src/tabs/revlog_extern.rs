@@ -220,12 +220,16 @@ impl Component for RevlogExtern {
 		out: &mut Vec<CommandInfo>,
 		force_all: bool,
 	) -> CommandBlocking {
-		match self.focused {
-			Focus::MainLog => self.main_log.commands(out, force_all),
-			Focus::CompareLog => {
-				self.compare_log.commands(out, force_all)
-			}
-		};
+		if self.visible || force_all {
+			match self.focused {
+				Focus::MainLog => {
+					self.main_log.commands(out, force_all)
+				}
+				Focus::CompareLog => {
+					self.compare_log.commands(out, force_all)
+				}
+			};
+		}
 		visibility_blocking(self)
 	}
 
