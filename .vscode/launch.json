@@ -9,14 +9,8 @@
             //"terminal": "external",
             //"console": "externalTerminal",
             "args": [],
-            //[
-            //"--event_id",
-            //"2233",
-            //"--type",
-            //"rebase"
-            //],
-            //"cwd": "${workspaceRoot}",
-            "cwd": "/home/orlangur/myapps/rust/repotest",
+            "cwd": "${workspaceRoot}",
+            //"cwd": "/home/orlangur/myapps/rust/repotest",
         },
         {
             "name": "Launch Sequence editor",
@@ -28,7 +22,7 @@
             "args": //[],
             [
                 "--event_id",
-                "4956",
+                "8518",
                 "--type",
                 "rebase",
                 "/home/orlangur/myapps/rust/todo_file_path"
