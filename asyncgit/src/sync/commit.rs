@@ -103,7 +103,7 @@ pub fn amend(
 		None,
 		None,
 		None,
-		Some(msg),
+		if msg.is_empty() { None } else { Some(msg) },
 		Some(&tree),
 	)?;
 

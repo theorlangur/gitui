@@ -8,7 +8,10 @@ use crate::{
 	},
 	keys::{key_match, SharedKeyConfig},
 	options::SharedOptions,
-	queue::{Action, InternalEvent, NeedsUpdate, Queue, ResetItem},
+	queue::{
+		create_local_queue, Action, CustomConfirmData, InternalEvent,
+		LocalEvent, NeedsUpdate, Queue, ResetItem, SharedLocalQueue,
+	},
 	strings, try_or_popup,
 	ui::style::SharedTheme,
 };
@@ -79,6 +82,7 @@ pub struct Status {
 	git_action_executed: bool,
 	options: SharedOptions,
 	key_config: SharedKeyConfig,
+	local_queue: SharedLocalQueue,
 }
 
 impl DrawableComponent for Status {
@@ -212,6 +216,7 @@ impl Status {
 			key_config,
 			options,
 			repo,
+			local_queue: create_local_queue(),
 		}
 	}
 
@@ -394,6 +399,45 @@ impl Status {
 		None
 	}
 
+	fn process_local_queue(&mut self) {
+		loop {
+			//suboptimal...
+			let mut q = self.local_queue.borrow_mut();
+			let e = q.pop_front();
+			drop(q);
+			if let Some(e) = e {
+				match e {
+					LocalEvent::Confirmed(ref s) if s == "amend" => {
+						if self.can_commit() {
+							if let Err(e) =
+								sync::get_head(&self.repo.borrow())
+									.and_then(|h| {
+										sync::amend(
+											&self.repo.borrow(),
+											h,
+											"",
+										)
+									}) {
+								self.queue.push(
+									InternalEvent::ShowErrorMsg(
+										format!(
+											"Failed to amend:{e}"
+										),
+									),
+								);
+							}
+						}
+					}
+					_ => {
+						panic!("Unexpected local event");
+					}
+				}
+			} else {
+				break;
+			}
+		}
+	}
+
 	///
 	pub fn update(&mut self) -> Result<()> {
 		self.git_branch_name.lookup().map(Some).unwrap_or(None);
@@ -416,6 +460,7 @@ impl Status {
 				.unwrap_or(RepoState::Clean);
 
 			self.branch_compare();
+			self.process_local_queue();
 		}
 
 		Ok(())
@@ -758,6 +803,15 @@ impl Component for Status {
 				.order(-1),
 			);
 
+			out.push(
+				CommandInfo::new(
+					strings::commands::commit_amend(&self.key_config),
+					true,
+					self.can_commit() || force_all,
+				)
+				.order(-1),
+			);
+
 			out.push(CommandInfo::new(
 				strings::commands::open_branch_select_popup(
 					&self.key_config,
@@ -862,6 +916,40 @@ impl Component for Status {
 					self.queue.push(
 						InternalEvent::CommitWithExternalEditor,
 					);
+					Ok(EventState::Consumed)
+				} else if key_match(
+					k,
+					self.key_config.keys.commit_amend,
+				) && self.can_commit()
+				{
+					//custom confirmation here
+					let id = sync::get_head(&self.repo.borrow())
+						.and_then(|c| {
+							sync::get_commit_info(
+								&self.repo.borrow(),
+								&c,
+							)
+						});
+					match id {
+						Result::Err(e) => {
+							self.queue.push(
+								InternalEvent::ShowErrorMsg(format!("Failed to get current head commit details: {}", e)),
+							);
+						}
+						Result::Ok(id) => {
+							self.queue.push(
+								InternalEvent::ConfirmCustom(
+									CustomConfirmData {
+										title: "Amend last commit?"
+											.to_string(),
+										msg: id.get_summary(),
+										confirm: "amend".to_string(),
+										q: self.local_queue.clone(),
+									},
+								),
+							);
+						}
+					}
 					Ok(EventState::Consumed)
 				} else if key_match(
 					k,
