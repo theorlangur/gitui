@@ -19,6 +19,7 @@ use crate::{
 	ui::{calc_scroll_top, draw_scrollbar, Orientation},
 };
 use anyhow::Result;
+use asyncgit::sync::branch::checkout_branch_cmd;
 use asyncgit::sync::{
 	checkout_commit, cherrypick, get_commit_info, BranchDetails,
 	BranchInfo, CommitId, LogWalkerFilter, RepoPathRef, Tags,
@@ -744,11 +745,23 @@ impl CommitList {
 		if let Some(commit_hash) =
 			self.selected_entry().map(|entry| entry.id)
 		{
-			try_or_popup!(
-				self,
-				"failed to checkout commit:",
-				checkout_commit(&self.repo.borrow(), commit_hash)
-			);
+			let cmd = String::from("git checkout");
+			if cmd.is_empty() {
+				try_or_popup!(
+					self,
+					"failed to checkout commit:",
+					checkout_commit(&self.repo.borrow(), commit_hash)
+				);
+			} else {
+				try_or_popup!(
+					self,
+					"failed to checkout commit:",
+					checkout_branch_cmd(
+						cmd,
+						commit_hash.to_string().as_str()
+					)
+				);
+			}
 		}
 	}
 
