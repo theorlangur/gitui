@@ -3,7 +3,6 @@
 use anyhow::{anyhow, Result};
 use std::{
 	collections::HashSet,
-	os::unix::prelude::PermissionsExt,
 	path::PathBuf,
 	process::{Command, Stdio},
 	time::Duration,
@@ -29,6 +28,7 @@ impl<'a> TempEditor<'a> {
 
 	#[cfg(unix)]
 	fn set_permissions(&mut self) -> Result<()> {
+        use std::os::unix::prelude::PermissionsExt;
 		let mut perm = std::fs::metadata(self.cache_path.as_path())?
 			.permissions();
 		perm.set_mode(0o777);
