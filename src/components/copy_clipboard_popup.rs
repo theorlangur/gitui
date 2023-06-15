@@ -12,8 +12,8 @@ use anyhow::Result;
 use asyncgit::sync::{
 	get_commit_info, CommitId, CommitInfo, RepoPathRef,
 };
-use chrono::{DateTime, Local, NaiveDateTime, Utc};
 use crossterm::event::Event;
+use itertools::Itertools;
 use ratatui::{
 	backend::Backend,
 	layout::{Alignment, Rect},
@@ -24,7 +24,19 @@ use ratatui::{
 
 #[derive(Debug)]
 pub struct CopyClipboardOpen {
-	pub commit_id: CommitId,
+	commit_ids: Vec<CommitId>,
+}
+
+impl CopyClipboardOpen {
+	pub fn from_commit(c: CommitId) -> Self {
+		Self {
+			commit_ids: vec![c],
+		}
+	}
+
+	pub fn new(commit_ids: Vec<CommitId>) -> Self {
+		Self { commit_ids }
+	}
 }
 
 pub struct CopyPopupComponent {
@@ -52,20 +64,13 @@ impl CopyPopupComponent {
 	}
 
 	pub fn open(&mut self, copy: CopyClipboardOpen) -> Result<()> {
-		self.copy_request = Some(CopyClipboardOpen {
-			commit_id: copy.commit_id,
-		});
+		self.copy_request = Some(copy);
 		self.show()?;
 
 		Ok(())
 	}
 
-	fn get_commit(&mut self) -> &CommitId {
-		&self.copy_request.as_ref().unwrap().commit_id
-	}
-
-	fn get_commit_info(&mut self) -> Result<CommitInfo> {
-		let oid = &self.copy_request.as_ref().unwrap().commit_id;
+	fn get_commit_info(&self, oid: &CommitId) -> Result<CommitInfo> {
 		Ok(get_commit_info(&self.repo.borrow(), oid)?)
 	}
 
@@ -207,56 +212,78 @@ impl Component for CopyPopupComponent {
 					key,
 					self.key_config.keys.copy_clipboard_sha,
 				) {
-					crate::clipboard::copy_string(
-						&self.get_commit().to_string(),
-					)?;
+					if let Some(r) = &self.copy_request {
+						crate::clipboard::copy_string(
+							&r.commit_ids
+								.iter()
+								.map(|i| i.to_string())
+								.join("\n"),
+						)?;
+					}
 					self.hide();
 				} else if key_match(
 					key,
 					self.key_config.keys.copy_clipboard_email,
 				) {
-					crate::clipboard::copy_string(
-						&self.get_commit_info()?.email,
-					)?;
+					if let Some(r) = &self.copy_request {
+						crate::clipboard::copy_string(
+							&r.commit_ids
+								.iter()
+								.filter_map(|i| {
+									self.get_commit_info(i).ok()
+								})
+								.map(|i| i.email)
+								.join("\n"),
+						)?;
+					}
 					self.hide();
 				} else if key_match(
 					key,
 					self.key_config.keys.copy_clipboard_author,
 				) {
-					crate::clipboard::copy_string(
-						&self.get_commit_info()?.author,
-					)?;
+					if let Some(r) = &self.copy_request {
+						crate::clipboard::copy_string(
+							&r.commit_ids
+								.iter()
+								.filter_map(|i| {
+									self.get_commit_info(i).ok()
+								})
+								.map(|i| i.author)
+								.join("\n"),
+						)?;
+					}
 					self.hide();
 				} else if key_match(
 					key,
 					self.key_config.keys.copy_clipboard_message,
 				) {
-					crate::clipboard::copy_string(
-						&self.get_commit_info()?.message,
-					)?;
+					if let Some(r) = &self.copy_request {
+						crate::clipboard::copy_string(
+							&r.commit_ids
+								.iter()
+								.filter_map(|i| {
+									self.get_commit_info(i).ok()
+								})
+								.map(|i| i.message)
+								.join("\n"),
+						)?;
+					}
 					self.hide();
 				} else if key_match(
 					key,
 					self.key_config.keys.copy_clipboard_summary,
 				) {
-					let i = self.get_commit_info()?;
-					let date =
-						NaiveDateTime::from_timestamp_opt(i.time, 0);
-					let dt = DateTime::<Local>::from(
-						DateTime::<Utc>::from_utc(
-							date.unwrap_or_default(),
-							Utc,
-						),
-					);
-					let summary = format!(
-						"SHA: {}\nAuthor: {} <{}>\nDate: {}\n\n{}",
-						self.get_commit().to_string(),
-						i.author,
-						i.email,
-						dt,
-						i.message
-					);
-					crate::clipboard::copy_string(&summary)?;
+					if let Some(r) = &self.copy_request {
+						crate::clipboard::copy_string(
+							&r.commit_ids
+								.iter()
+								.filter_map(|i| {
+									self.get_commit_info(i).ok()
+								})
+								.map(|i| i.get_clipboard_summary())
+								.join("\n"),
+						)?;
+					}
 					self.hide();
 				}
 			}

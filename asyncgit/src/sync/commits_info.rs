@@ -1,6 +1,6 @@
 use super::RepoPath;
 use crate::{error::Result, sync::repository::repo};
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Local, NaiveDateTime, Utc};
 use git2::{Commit, Error, Oid};
 use scopetime::scope_time;
 use unicode_truncate::UnicodeTruncateStr;
@@ -84,6 +84,24 @@ impl CommitInfo {
 			&self.message[..msg_size]
 		)
 		.replace("\n", " ")
+	}
+
+	///
+	pub fn get_clipboard_summary(&self) -> String {
+		let date = NaiveDateTime::from_timestamp_opt(self.time, 0);
+		let dt = DateTime::<Local>::from(DateTime::<Utc>::from_utc(
+			date.unwrap_or_default(),
+			Utc,
+		));
+		let summary = format!(
+			"SHA: {}\nAuthor: {} <{}>\nDate: {}\n\n{}",
+			self.id.to_string(),
+			self.author,
+			self.email,
+			dt,
+			self.message
+		);
+		summary
 	}
 }
 

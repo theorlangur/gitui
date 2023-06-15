@@ -374,19 +374,30 @@ impl Component for Revlog {
 					self.update()?;
 					return Ok(EventState::Consumed);
 				} else if key_match(k, self.key_config.keys.copy) {
-					return self.selected_commit().map_or(
-						Ok(EventState::NotConsumed),
-						|id| {
-							self.queue.push(
-								InternalEvent::OpenPopup(
-									StackablePopupOpen::CopyClipboardCommit(
-										CopyClipboardOpen{commit_id: id},
-									),
+					return if self.list.marked_count() > 0 {
+						self.queue.push(InternalEvent::OpenPopup(
+							StackablePopupOpen::CopyClipboardCommit(
+								CopyClipboardOpen::new(
+									self.list.marked_commits(),
 								),
-							);
-							Ok(EventState::Consumed)
-						},
-					);
+							),
+						));
+						Ok(EventState::Consumed)
+					} else {
+						return self.selected_commit().map_or(
+							Ok(EventState::NotConsumed),
+							|id| {
+								self.queue.push(
+									InternalEvent::OpenPopup(
+										StackablePopupOpen::CopyClipboardCommit(
+											CopyClipboardOpen::from_commit(id),
+										),
+									),
+								);
+								Ok(EventState::Consumed)
+							},
+						);
+					};
 				} else if key_match(k, self.key_config.keys.push) {
 					self.queue.push(InternalEvent::PushTags);
 					return Ok(EventState::Consumed);
