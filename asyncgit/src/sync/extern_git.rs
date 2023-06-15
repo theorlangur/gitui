@@ -27,11 +27,17 @@ impl<'a> TempEditor<'a> {
 		}
 	}
 
+	#[cfg(unix)]
 	fn set_permissions(&mut self) -> Result<()> {
 		let mut perm = std::fs::metadata(self.cache_path.as_path())?
 			.permissions();
 		perm.set_mode(0o777);
 		std::fs::set_permissions(self.cache_path.as_path(), perm)?;
+		Ok(())
+	}
+
+	#[cfg(windows)]
+	fn set_permissions(&mut self) -> Result<()> {
 		Ok(())
 	}
 
@@ -46,6 +52,7 @@ impl<'a> TempEditor<'a> {
 		Ok(())
 	}
 
+	#[cfg(unix)]
 	fn create_script(&mut self) -> Result<()> {
 		let exe_path = std::env::current_exe()?;
 		self.cache_path.push(format!("edit{}.sh", self.event_id));
@@ -53,6 +60,21 @@ impl<'a> TempEditor<'a> {
 			self.cache_path.as_os_str(),
 			format!(
 				"#!/bin/sh\n{} --event_id {} --type rebase \"$@\"",
+				exe_path.to_str().unwrap(),
+				self.event_id
+			),
+		)?;
+		Ok(())
+	}
+
+	#[cfg(windows)]
+	fn create_script(&mut self) -> Result<()> {
+		let exe_path = std::env::current_exe()?;
+		self.cache_path.push(format!("edit{}.bat", self.event_id));
+		std::fs::write(
+			self.cache_path.as_os_str(),
+			format!(
+				"{} --event_id {} --type rebase %*",
 				exe_path.to_str().unwrap(),
 				self.event_id
 			),
