@@ -1,5 +1,6 @@
 use super::RepoPath;
 use crate::{error::Result, sync::repository::repo};
+use chrono::NaiveDateTime;
 use git2::{Commit, Error, Oid};
 use scopetime::scope_time;
 use unicode_truncate::UnicodeTruncateStr;
@@ -64,6 +65,26 @@ pub struct CommitInfo {
 	pub id: CommitId,
 	///
 	pub email: String,
+}
+
+impl CommitInfo {
+	///
+	pub fn get_summary(&self) -> String {
+		let date =
+			NaiveDateTime::from_timestamp_opt(self.time, 0).unwrap();
+		const MAX_MSG_SIZE: usize = 28;
+		const MAX_AUTHOR_SIZE: usize = 12;
+		let msg_size = self.message.len().min(MAX_MSG_SIZE);
+		let author_size = self.author.len().min(MAX_AUTHOR_SIZE);
+		format!(
+			"{} {} {:MAX_AUTHOR_SIZE$} '{}'",
+			self.id.get_short_string(),
+			date,
+			&self.author[..author_size],
+			&self.message[..msg_size]
+		)
+		.replace("\n", " ")
+	}
 }
 
 ///

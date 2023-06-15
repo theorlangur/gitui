@@ -199,7 +199,7 @@ impl Default for KeysList {
 			log_checkout_commit: GituiKeyEvent { code: KeyCode::Char('S'), modifiers: KeyModifiers::SHIFT },
 			log_reset_comit: GituiKeyEvent { code: KeyCode::Char('R'), modifiers: KeyModifiers::SHIFT },
 			log_reword_comit: GituiKeyEvent { code: KeyCode::Char('r'), modifiers: KeyModifiers::empty() },
-			commit_amend: GituiKeyEvent::new(KeyCode::Char('a'),  KeyModifiers::CONTROL),
+			commit_amend: GituiKeyEvent::new(KeyCode::Char('A'),  KeyModifiers::SHIFT),
 			toggle_verify: GituiKeyEvent::new(KeyCode::Char('f'),  KeyModifiers::CONTROL),
 			copy: GituiKeyEvent::new(KeyCode::Char('y'),  KeyModifiers::empty()),
 			create_branch: GituiKeyEvent::new(KeyCode::Char('c'),  KeyModifiers::empty()),

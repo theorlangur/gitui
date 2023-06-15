@@ -24,7 +24,7 @@ use asyncgit::sync::{
 	BranchInfo, CommitId, LogWalkerFilter, RepoPathRef, Tags,
 };
 
-use chrono::{DateTime, Local, NaiveDateTime};
+use chrono::{DateTime, Local};
 use crossterm::event::Event;
 use itertools::Itertools;
 use ratatui::layout::{Constraint, Layout};
@@ -886,20 +886,7 @@ impl CommitList {
 		c: &CommitId,
 	) -> Result<String> {
 		let info = get_commit_info(&self.repo.borrow(), c)?;
-		let date =
-			NaiveDateTime::from_timestamp_opt(info.time, 0).unwrap();
-		const MAX_MSG_SIZE: usize = 28;
-		const MAX_AUTHOR_SIZE: usize = 12;
-		let msg_size = info.message.len().min(MAX_MSG_SIZE);
-		let author_size = info.author.len().min(MAX_AUTHOR_SIZE);
-		Ok(format!(
-			"{} {} {:MAX_AUTHOR_SIZE$} '{}'",
-			c.get_short_string(),
-			date,
-			&info.author[..author_size],
-			&info.message[..msg_size]
-		)
-		.replace("\n", " "))
+		Ok(info.get_summary())
 	}
 
 	fn get_marked_summary(&self) -> String {
