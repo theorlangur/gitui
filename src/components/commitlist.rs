@@ -1344,7 +1344,7 @@ impl Component for CommitList {
 		out.push(CommandInfo::new(
 			strings::commands::scroll(&self.key_config),
 			self.selected_entry().is_some(),
-			true,
+			self.combo_state == KeyComboState::Empty,
 		));
 		out.push(CommandInfo::new(
 			strings::commands::commit_list_mark(
@@ -1352,44 +1352,59 @@ impl Component for CommitList {
 				self.selected_entry_marked(),
 			),
 			true,
+			self.combo_state == KeyComboState::Empty,
+		));
+		out.push(CommandInfo::new(
+			strings::commands::start_search(&self.key_config),
 			true,
+			self.combo_state == KeyComboState::Empty,
+		));
+		out.push(CommandInfo::new(
+			strings::commands::start_filter(&self.key_config),
+			true,
+			self.combo_state == KeyComboState::Empty,
 		));
 		out.push(CommandInfo::new(
 			strings::commands::search_all(&self.key_config),
 			true,
-			true,
+			self.combo_state == KeyComboState::SearchInitForward,
 		));
 		out.push(CommandInfo::new(
 			strings::commands::search_author(&self.key_config),
 			true,
-			true,
+			self.combo_state == KeyComboState::SearchInitForward,
 		));
 		out.push(CommandInfo::new(
 			strings::commands::search_msg(&self.key_config),
 			true,
-			true,
+			self.combo_state == KeyComboState::SearchInitForward,
 		));
 		out.push(CommandInfo::new(
 			strings::commands::search_sha(&self.key_config),
 			true,
-			true,
+			self.combo_state == KeyComboState::SearchInitForward,
 		));
 		out.push(CommandInfo::new(
 			strings::commands::filter_all(&self.key_config),
 			true,
-			true,
+			self.combo_state == KeyComboState::FilterInit,
 		));
 		out.push(CommandInfo::new(
 			strings::commands::filter_author(&self.key_config),
 			true,
-			true,
+			self.combo_state == KeyComboState::FilterInit,
 		));
 		out.push(CommandInfo::new(
 			strings::commands::filter_msg(&self.key_config),
 			true,
-			true,
+			self.combo_state == KeyComboState::FilterInit,
 		));
-		CommandBlocking::PassingOn
+
+		if self.combo_state == KeyComboState::Empty {
+			CommandBlocking::PassingOn
+		} else {
+			CommandBlocking::Blocking
+		}
 	}
 
 	fn focus(&mut self, _focus: bool) {

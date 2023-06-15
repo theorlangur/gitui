@@ -514,7 +514,11 @@ impl Component for Revlog {
 		force_all: bool,
 	) -> CommandBlocking {
 		if self.visible || force_all {
-			self.list.commands(out, force_all);
+			if self.list.commands(out, force_all)
+				== CommandBlocking::Blocking
+			{
+				return CommandBlocking::Blocking;
+			}
 		}
 
 		out.push(CommandInfo::new(
