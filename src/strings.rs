@@ -631,18 +631,18 @@ pub mod commands {
 	pub fn filter_all(key_config: &SharedKeyConfig) -> CommandText {
 		CommandText::new(
 			format!(
-				"Filter all [{}]",
+				"Author/Message [{}]",
 				key_config
 					.get_hint(key_config.keys.filter_commits_init),
 			),
-			"Start filteringl by Author/Message",
+			"Start filtering by Author/Message",
 			CMD_GROUP_GENERAL,
 		)
 	}
 	pub fn start_filter(key_config: &SharedKeyConfig) -> CommandText {
 		CommandText::new(
 			format!(
-				"Start Filter [{}]",
+				"Filter [{}]",
 				key_config
 					.get_hint(key_config.keys.filter_commits_init),
 			),
@@ -655,29 +655,29 @@ pub mod commands {
 	) -> CommandText {
 		CommandText::new(
 			format!(
-				"Filter author [{}]",
+				"Author [{}]",
 				key_config
 					.get_hint(key_config.keys.search_filter_author),
 			),
-			"Start searching by Author",
+			"Start filtering by Author",
 			CMD_GROUP_GENERAL,
 		)
 	}
 	pub fn filter_msg(key_config: &SharedKeyConfig) -> CommandText {
 		CommandText::new(
 			format!(
-				"Filter message [{}]",
+				"Message [{}]",
 				key_config
 					.get_hint(key_config.keys.search_filter_msg),
 			),
-			"Start searching by message",
+			"Start filtering by message",
 			CMD_GROUP_GENERAL,
 		)
 	}
 	pub fn search_all(key_config: &SharedKeyConfig) -> CommandText {
 		CommandText::new(
 			format!(
-				"Search all [{}]",
+				"Auth/Msg/SHA [{}]",
 				key_config.get_hint(
 					key_config.keys.start_search_forward_init
 				),
@@ -689,7 +689,7 @@ pub mod commands {
 	pub fn start_search(key_config: &SharedKeyConfig) -> CommandText {
 		CommandText::new(
 			format!(
-				"Start Search [{}]",
+				"Search [{}]",
 				key_config.get_hint(
 					key_config.keys.start_search_forward_init
 				),
@@ -703,7 +703,7 @@ pub mod commands {
 	) -> CommandText {
 		CommandText::new(
 			format!(
-				"Search author [{}]",
+				"Author [{}]",
 				key_config
 					.get_hint(key_config.keys.search_filter_author),
 			),
@@ -714,7 +714,7 @@ pub mod commands {
 	pub fn search_msg(key_config: &SharedKeyConfig) -> CommandText {
 		CommandText::new(
 			format!(
-				"Search message [{}]",
+				"Message [{}]",
 				key_config
 					.get_hint(key_config.keys.search_filter_msg),
 			),
@@ -725,7 +725,7 @@ pub mod commands {
 	pub fn search_sha(key_config: &SharedKeyConfig) -> CommandText {
 		CommandText::new(
 			format!(
-				"Search SHA [{}]",
+				"SHA [{}]",
 				key_config.get_hint(key_config.keys.search_sha),
 			),
 			"Start searching by SHA",
