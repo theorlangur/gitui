@@ -180,7 +180,7 @@ impl Default for KeysList {
 			shift_down: GituiKeyEvent::new(KeyCode::Down,  KeyModifiers::SHIFT),
 			enter: GituiKeyEvent::new(KeyCode::Enter,  KeyModifiers::empty()),
 			blame: GituiKeyEvent::new(KeyCode::Char('B'),  KeyModifiers::SHIFT),
-			file_history: GituiKeyEvent::new(KeyCode::Char('H'),  KeyModifiers::SHIFT),
+			file_history: GituiKeyEvent::new(KeyCode::Char('I'),  KeyModifiers::SHIFT),
 			edit_file: GituiKeyEvent::new(KeyCode::Char('e'),  KeyModifiers::empty()),
 			status_stage_all: GituiKeyEvent::new(KeyCode::Char('a'),  KeyModifiers::empty()),
 			status_reset_item: GituiKeyEvent::new(KeyCode::Char('D'),  KeyModifiers::SHIFT),
