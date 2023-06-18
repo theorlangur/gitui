@@ -235,6 +235,7 @@ impl RevisionFilesComponent {
 	fn open_finder(&self) {
 		self.queue.push(InternalEvent::OpenFileFinder(
 			self.files.clone().unwrap_or_default(),
+			None,
 		));
 	}
 

@@ -142,6 +142,7 @@ pub struct KeysList {
 	pub trigger_branch_shortcut: GituiKeyEvent,
 	pub toggle_split: GituiKeyEvent,
 	pub cherrypick: GituiKeyEvent,
+	pub fuzzy_find: GituiKeyEvent,
 }
 
 #[rustfmt::skip]
@@ -247,6 +248,7 @@ impl Default for KeysList {
 			trigger_branch_shortcut: GituiKeyEvent::new(KeyCode::Char('b'),  KeyModifiers::empty()),
             toggle_split: GituiKeyEvent::new(KeyCode::Char('|'),  KeyModifiers::empty()),
             cherrypick: GituiKeyEvent::new(KeyCode::Char('c'),  KeyModifiers::empty()),
+			fuzzy_find: GituiKeyEvent::new(KeyCode::Char('f'),  KeyModifiers::empty()),
 		}
 	}
 }

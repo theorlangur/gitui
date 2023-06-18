@@ -153,6 +153,7 @@ dependencies = [
  "thiserror",
  "unicode-truncate",
  "url",
+ "walkdir",
 ]
 
 [[package]]

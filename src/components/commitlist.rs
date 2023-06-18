@@ -27,7 +27,7 @@ use asyncgit::sync::{
 };
 
 use chrono::{DateTime, Local};
-use crossterm::event::Event;
+use crossterm::event::{Event, KeyEvent};
 use itertools::Itertools;
 use ratatui::layout::{Constraint, Layout};
 use ratatui::{
@@ -37,6 +37,7 @@ use ratatui::{
 	widgets::{Block, Borders, Paragraph},
 	Frame,
 };
+use std::path::PathBuf;
 use std::{
 	borrow::Cow, cell::Cell, cmp, collections::BTreeMap,
 	convert::TryFrom, time::Instant,
@@ -95,7 +96,7 @@ pub struct CommitList {
 	last_selected_commit: Option<CommitId>,
 	external_focus: bool,
 	local_queue: SharedLocalQueue,
-	path_filter: String,
+	path_filter: PathBuf,
 }
 
 impl CommitList {
@@ -157,7 +158,15 @@ impl CommitList {
 			last_selected_commit: None,
 			external_focus: true,
 			local_queue: create_local_queue(),
-			path_filter: String::new(),
+			path_filter: PathBuf::new(),
+		}
+	}
+
+	fn update_path_filter(&mut self, p: PathBuf) {
+		if self.path_filter != p {
+			self.path_filter = p;
+			self.filter_updated = true;
+			self.queue.push(InternalEvent::Update(NeedsUpdate::ALL));
 		}
 	}
 
@@ -182,6 +191,9 @@ impl CommitList {
 					}
 					LocalEvent::Confirmed(ref s) if s == "drop" => {
 						self.drop_marked()
+					}
+					LocalEvent::PickFile(p) => {
+						self.update_path_filter(p);
 					}
 					_ => {
 						panic!("Unexpected local event");
@@ -247,10 +259,12 @@ impl CommitList {
 	}
 
 	pub fn get_path_filter(&self) -> Option<LogWalkerFilter> {
-		if self.path_filter.is_empty() {
+		if self.path_filter.as_os_str().is_empty() {
 			None
+		} else if let Some(p) = self.path_filter.to_str() {
+			Some(filter_by_path(p.to_string()))
 		} else {
-			Some(filter_by_path(self.path_filter.clone()))
+			None
 		}
 	}
 
@@ -933,70 +947,81 @@ impl CommitList {
 		commit_summary
 	}
 
+	fn try_handle_combo_event(
+		&mut self,
+		k: &KeyEvent,
+	) -> Option<EventState> {
+		match self.combo_state {
+			KeyComboState::SearchInitForward => {
+				self.combo_state = KeyComboState::Empty;
+				if key_match(
+					k,
+					self.key_config.keys.start_search_forward_init,
+				) {
+					self.search_options.enable_all();
+					self.show_search();
+					Some(EventState::Consumed)
+				} else if key_match(
+					k,
+					self.key_config.keys.search_filter_author,
+				) {
+					self.search_options.author_only();
+					self.show_search();
+					Some(EventState::Consumed)
+				} else if key_match(
+					k,
+					self.key_config.keys.search_filter_msg,
+				) {
+					self.search_options.message_only();
+					self.show_search();
+					Some(EventState::Consumed)
+				} else if key_match(
+					k,
+					self.key_config.keys.search_sha,
+				) {
+					self.search_options.sha_only();
+					self.show_search();
+					Some(EventState::Consumed)
+				} else {
+					None
+				}
+			}
+			KeyComboState::FilterInit => {
+				self.combo_state = KeyComboState::Empty;
+				if key_match(
+					k,
+					self.key_config.keys.filter_commits_init,
+				) {
+					self.filter_options.enable_all();
+					self.show_filter();
+					Some(EventState::Consumed)
+				} else if key_match(
+					k,
+					self.key_config.keys.search_filter_author,
+				) {
+					self.filter_options.author_only();
+					self.show_filter();
+					Some(EventState::Consumed)
+				} else if key_match(
+					k,
+					self.key_config.keys.search_filter_msg,
+				) {
+					self.filter_options.message_only();
+					self.show_filter();
+					Some(EventState::Consumed)
+				} else {
+					None
+				}
+			}
+			KeyComboState::Empty => None,
+		}
+	}
+
 	fn list_event(&mut self, ev: &Event) -> Result<EventState> {
 		if let Event::Key(k) = ev {
-			match self.combo_state {
-				KeyComboState::SearchInitForward => {
-					self.combo_state = KeyComboState::Empty;
-					if key_match(
-						k,
-						self.key_config
-							.keys
-							.start_search_forward_init,
-					) {
-						self.search_options.enable_all();
-						self.show_search();
-						return Ok(EventState::Consumed);
-					} else if key_match(
-						k,
-						self.key_config.keys.search_filter_author,
-					) {
-						self.search_options.author_only();
-						self.show_search();
-						return Ok(EventState::Consumed);
-					} else if key_match(
-						k,
-						self.key_config.keys.search_filter_msg,
-					) {
-						self.search_options.message_only();
-						self.show_search();
-						return Ok(EventState::Consumed);
-					} else if key_match(
-						k,
-						self.key_config.keys.search_sha,
-					) {
-						self.search_options.sha_only();
-						self.show_search();
-						return Ok(EventState::Consumed);
-					}
-				}
-				KeyComboState::FilterInit => {
-					self.combo_state = KeyComboState::Empty;
-					if key_match(
-						k,
-						self.key_config.keys.filter_commits_init,
-					) {
-						self.filter_options.enable_all();
-						self.show_filter();
-						return Ok(EventState::Consumed);
-					} else if key_match(
-						k,
-						self.key_config.keys.search_filter_author,
-					) {
-						self.filter_options.author_only();
-						self.show_filter();
-						return Ok(EventState::Consumed);
-					} else if key_match(
-						k,
-						self.key_config.keys.search_filter_msg,
-					) {
-						self.filter_options.message_only();
-						self.show_filter();
-						return Ok(EventState::Consumed);
-					}
-				}
-				KeyComboState::Empty => {}
-			};
+			if let Some(r) = self.try_handle_combo_event(k) {
+				return Ok(r);
+			}
 			let selection_changed =
 				if key_match(k, self.key_config.keys.move_up) {
 					self.move_selection(ScrollType::Up)?
@@ -1089,8 +1114,14 @@ impl CommitList {
 					k,
 					self.key_config.keys.exit_popup,
 				) {
-					self.stop_search();
-					self.stop_filter();
+					if self.search_field.is_visible()
+						|| self.filter_field.is_visible()
+					{
+						self.stop_search();
+						self.stop_filter();
+					} else {
+						self.update_path_filter(PathBuf::new());
+					}
 					true
 				} else if key_match(
 					k,
@@ -1116,6 +1147,30 @@ impl CommitList {
 					self.key_config.keys.search_prev,
 				) {
 					self.search_commit_backward();
+					true
+				} else if key_match(
+					k,
+					self.key_config.keys.fuzzy_find,
+				) {
+					let r = asyncgit::sync::repo_files(
+						&self.repo.borrow(),
+						true,
+					);
+
+					match r {
+						Ok(v) => self.queue.push(
+							InternalEvent::OpenFileFinder(
+								v,
+								Some(self.local_queue.clone()),
+							),
+						),
+						Err(e) => self.queue.push(
+							InternalEvent::ShowErrorMsg(format!(
+								"Could not get file list: {}",
+								e
+							)),
+						),
+					}
 					true
 				} else {
 					false
@@ -1231,7 +1286,9 @@ impl DrawableComponent for CommitList {
 		f: &mut Frame<B>,
 		area: Rect,
 	) -> Result<()> {
+		let path_visible = !self.path_filter.as_os_str().is_empty();
 		let original_area = area.clone();
+		let v_size_path = if path_visible { 2 } else { 0 };
 		let v_size_search =
 			if self.search_field.is_visible() { 2 } else { 0 };
 		let v_size_filter =
@@ -1240,6 +1297,7 @@ impl DrawableComponent for CommitList {
 			.direction(ratatui::layout::Direction::Vertical)
 			.constraints(
 				[
+					Constraint::Length(v_size_path),
 					Constraint::Length(v_size_filter),
 					Constraint::Length(v_size_search),
 					Constraint::Percentage(100),
@@ -1247,9 +1305,22 @@ impl DrawableComponent for CommitList {
 				.as_ref(),
 			)
 			.split(area);
-		let filter_area = v_blocks[0];
-		let search_area = v_blocks[1];
-		let list_area = v_blocks[2];
+		let path_area = v_blocks[0];
+		let filter_area = v_blocks[1];
+		let search_area = v_blocks[2];
+		let list_area = v_blocks[3];
+
+		if path_visible {
+			let p_filter = self.path_filter.to_str().unwrap_or("");
+			let path_ui = Paragraph::new(Span::raw(p_filter)).block(
+				Block::default()
+					.borders(
+						Borders::TOP | Borders::RIGHT | Borders::LEFT,
+					)
+					.border_style(self.theme.block(false)),
+			);
+			f.render_widget(path_ui, path_area);
+		}
 
 		self.draw_input_field(
 			f,
@@ -1374,6 +1445,11 @@ impl Component for CommitList {
 				&self.key_config,
 				self.selected_entry_marked(),
 			),
+			true,
+			self.combo_state == KeyComboState::Empty,
+		));
+		out.push(CommandInfo::new(
+			strings::commands::filter_by_path(&self.key_config),
 			true,
 			self.combo_state == KeyComboState::Empty,
 		));

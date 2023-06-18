@@ -9,6 +9,7 @@ use std::{
 	cmp::Ordering,
 	path::{Path, PathBuf},
 };
+use walkdir::WalkDir;
 
 /// `tree_files` returns a list of `FileTree`
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -19,6 +20,33 @@ pub struct TreeFile {
 	pub filemode: i32,
 	// internal object id
 	id: Oid,
+}
+
+/// fs-based file list (optionally with directories)
+pub fn repo_files(
+	repo_path: &RepoPath,
+	with_directories: bool,
+) -> Result<Vec<TreeFile>> {
+	let res: Vec<_> = WalkDir::new(repo_path.gitpath())
+		.into_iter()
+		.filter_map(|e| e.ok())
+		.filter(|e| {
+			(with_directories || !e.file_type().is_dir())
+				&& !e
+					.path()
+					.to_str()
+					.unwrap_or("")
+					.trim_start_matches("./")
+					.starts_with('.')
+		})
+		.map(|e| TreeFile {
+			path: e.path().to_path_buf(),
+			filemode: 0,
+			id: Oid::zero(),
+		})
+		.collect();
+	//
+	Ok(res)
 }
 
 /// guarantees sorting the result

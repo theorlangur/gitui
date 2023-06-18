@@ -4,7 +4,10 @@ use super::{
 };
 use crate::{
 	keys::{key_match, SharedKeyConfig},
-	queue::{InternalEvent, Queue},
+	queue::{
+		InternalEvent, LocalEvent, NeedsUpdate, Queue,
+		SharedLocalQueue,
+	},
 	string_utils::trim_length_left,
 	strings,
 	ui::{self, style::SharedTheme},
@@ -33,6 +36,7 @@ pub struct FileFindPopup {
 	selected_index: Option<usize>,
 	files_filtered: Vec<(usize, Vec<usize>)>,
 	key_config: SharedKeyConfig,
+	response_queue: Option<SharedLocalQueue>,
 }
 
 impl FileFindPopup {
@@ -62,6 +66,7 @@ impl FileFindPopup {
 			selected_index: None,
 			key_config,
 			selection: 0,
+			response_queue: None,
 		}
 	}
 
@@ -126,12 +131,33 @@ impl FileFindPopup {
 				.and_then(|index| self.files.get(index))
 				.map(|f| f.path.clone());
 
-			self.queue.push(InternalEvent::FileFinderChanged(file));
+			if self.response_queue.is_none() {
+				self.queue
+					.push(InternalEvent::FileFinderChanged(file));
+			}
 		}
 	}
 
-	pub fn open(&mut self, files: &[TreeFile]) -> Result<()> {
+	fn finish_selection(&mut self) {
+		if let Some(q) = self.response_queue.as_mut() {
+			let file = self
+				.selected_index
+				.and_then(|index| self.files.get(index))
+				.map(|f| f.path.clone());
+			q.borrow_mut().push_back(LocalEvent::PickFile(
+				file.unwrap_or_default(),
+			));
+			self.queue.push(InternalEvent::Update(NeedsUpdate::ALL));
+		}
+	}
+
+	pub fn open(
+		&mut self,
+		files: &[TreeFile],
+		queue: Option<SharedLocalQueue>,
+	) -> Result<()> {
 		self.show()?;
+		self.response_queue = queue;
 		self.find_text.show()?;
 		self.find_text.set_text(String::new());
 		self.query = None;
@@ -307,9 +333,10 @@ impl Component for FileFindPopup {
 	) -> Result<EventState> {
 		if self.is_visible() {
 			if let Event::Key(key) = event {
-				if key_match(key, self.key_config.keys.exit_popup)
-					|| key_match(key, self.key_config.keys.enter)
-				{
+				if key_match(key, self.key_config.keys.exit_popup) {
+					self.hide();
+				} else if key_match(key, self.key_config.keys.enter) {
+					self.finish_selection();
 					self.hide();
 				} else if key_match(
 					key,
@@ -339,6 +366,7 @@ impl Component for FileFindPopup {
 	}
 
 	fn hide(&mut self) {
+		self.response_queue = None;
 		self.visible = false;
 	}
 

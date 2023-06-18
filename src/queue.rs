@@ -31,6 +31,7 @@ bitflags! {
 pub enum LocalEvent {
 	PickBranch(BranchInfo),
 	Confirmed(String),
+	PickFile(PathBuf),
 }
 
 pub type LocalQueue = VecDeque<LocalEvent>;
@@ -138,7 +139,7 @@ pub enum InternalEvent {
 	///
 	OptionSwitched(AppOption),
 	///
-	OpenFileFinder(Vec<TreeFile>),
+	OpenFileFinder(Vec<TreeFile>, Option<SharedLocalQueue>),
 	///
 	OpenBranchFinder(Vec<String>),
 	///

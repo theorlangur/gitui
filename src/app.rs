@@ -971,8 +971,8 @@ impl App {
 			InternalEvent::StatusLastFileMoved => {
 				self.status_tab.last_file_moved()?;
 			}
-			InternalEvent::OpenFileFinder(files) => {
-				self.find_file_popup.open(&files)?;
+			InternalEvent::OpenFileFinder(files, queue) => {
+				self.find_file_popup.open(&files, queue)?;
 				flags
 					.insert(NeedsUpdate::ALL | NeedsUpdate::COMMANDS);
 			}

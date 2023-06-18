@@ -698,6 +698,18 @@ pub mod commands {
 			CMD_GROUP_GENERAL,
 		)
 	}
+	pub fn filter_by_path(
+		key_config: &SharedKeyConfig,
+	) -> CommandText {
+		CommandText::new(
+			format!(
+				"For path... [{}]",
+				key_config.get_hint(key_config.keys.fuzzy_find),
+			),
+			"Show commits for path...",
+			CMD_GROUP_GENERAL,
+		)
+	}
 	pub fn search_author(
 		key_config: &SharedKeyConfig,
 	) -> CommandText {
