@@ -59,12 +59,16 @@ pub use config::{
 };
 pub use diff::get_diff_commit;
 pub use git2::BranchType;
+pub use git2::Commit;
+pub use git2::Repository;
 pub use hooks::{
 	hooks_commit_msg, hooks_post_commit, hooks_pre_commit, HookResult,
 };
 pub use hunks::{reset_hunk, stage_hunk, unstage_hunk};
 pub use ignore::add_to_ignore;
-pub use logwalker::{diff_contains_file, LogWalker, LogWalkerFilter};
+pub use logwalker::{
+	diff_contains_file, filter_by_path, LogWalker, LogWalkerFilter,
+};
 pub use merge::{
 	abort_pending_rebase, abort_pending_state,
 	continue_pending_rebase, merge_branch, merge_commit, merge_msg,

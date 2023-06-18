@@ -1,3 +1,4 @@
+use super::commit_files::get_commit_diff_by_path;
 use super::CommitId;
 use crate::sync::RepoPath;
 use crate::{
@@ -34,8 +35,58 @@ impl<'a> Ord for TimeOrderedCommit<'a> {
 
 ///
 pub type LogWalkerFilter = Arc<
-	Box<dyn Fn(&Repository, &CommitId) -> Result<bool> + Send + Sync>,
+	Box<
+		dyn Fn(&Repository, &CommitId, &Commit) -> Result<bool>
+			+ Send
+			+ Sync,
+	>,
 >;
+
+#[macro_export]
+///
+macro_rules! filter_compose_and {
+	($e:expr) => {
+		$e
+	};
+	($e:expr, $($y:expr),+) => {
+		std::sync::Arc::new(Box::new(
+			move |repo: &asyncgit::sync::Repository,
+				  commit_id: &CommitId,
+				  commit: &asyncgit::sync::Commit|
+				  -> asyncgit::Result<bool> {
+				if let Some(ref f) = $e {
+					if f(repo, commit_id, commit)? != true {
+						return Ok(false);
+					}
+				}
+				$(
+					if let Some(ref f) = $y {
+						if f(repo, commit_id, commit)? != true {
+							return Ok(false);
+						}
+					}
+				)+
+				Ok(true)
+			},
+		))
+	};
+}
+
+///
+pub fn filter_by_path(path: String) -> LogWalkerFilter {
+	Arc::new(Box::new(
+		move |repo: &Repository,
+		      _commit_id: &CommitId,
+		      commit: &Commit|
+		      -> Result<bool> {
+			let diff = get_commit_diff_by_path(repo, commit, &path)?;
+
+			let contains_file = diff.deltas().len() > 0;
+
+			Ok(contains_file)
+		},
+	))
+}
 
 ///
 pub fn diff_contains_file(
@@ -44,7 +95,8 @@ pub fn diff_contains_file(
 ) -> LogWalkerFilter {
 	Arc::new(Box::new(
 		move |repo: &Repository,
-		      commit_id: &CommitId|
+		      commit_id: &CommitId,
+		      _commit: &Commit|
 		      -> Result<bool> {
 			let diff = get_commit_diff(
 				&repo_path,
@@ -132,7 +184,7 @@ impl<'a> LogWalker<'a> {
 			let id: CommitId = c.0.id().into();
 			let commit_should_be_included =
 				if let Some(ref filter) = self.filter {
-					filter(self.repo, &id)?
+					filter(self.repo, &id, &c.0)?
 				} else {
 					true
 				};

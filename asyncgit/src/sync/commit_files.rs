@@ -6,7 +6,7 @@ use super::{
 use crate::{
 	error::Result, sync::repository::repo, StatusItem, StatusItemType,
 };
-use git2::{Diff, Repository};
+use git2::{Commit, Diff, Repository};
 use scopetime::scope_time;
 use std::cmp::Ordering;
 
@@ -84,6 +84,34 @@ pub fn get_compare_commits_diff(
 	let diff = repo.diff_tree_to_tree(
 		Some(&trees.0),
 		Some(&trees.1),
+		Some(&mut opts),
+	)?;
+
+	Ok(diff)
+}
+
+/// get simplified diff of a commit filtered by path
+pub fn get_commit_diff_by_path<'a>(
+	repo: &'a Repository,
+	commit: &Commit,
+	pathspec: &str,
+) -> Result<Diff<'a>> {
+	let commit_tree = commit.tree()?;
+
+	let parent = if commit.parent_count() > 0 {
+		repo.find_commit(commit.parent_id(0)?)
+			.ok()
+			.and_then(|c| c.tree().ok())
+	} else {
+		None
+	};
+
+	let mut opts = git2::DiffOptions::new();
+	opts.pathspec(pathspec);
+
+	let diff = repo.diff_tree_to_tree(
+		parent.as_ref(),
+		Some(&commit_tree),
 		Some(&mut opts),
 	)?;
 

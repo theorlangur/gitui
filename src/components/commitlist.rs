@@ -21,8 +21,9 @@ use crate::{
 use anyhow::Result;
 use asyncgit::sync::branch::checkout_branch_cmd;
 use asyncgit::sync::{
-	checkout_commit, cherrypick, get_commit_info, BranchDetails,
-	BranchInfo, CommitId, LogWalkerFilter, RepoPathRef, Tags,
+	checkout_commit, cherrypick, filter_by_path, get_commit_info,
+	BranchDetails, BranchInfo, CommitId, LogWalkerFilter,
+	RepoPathRef, Tags,
 };
 
 use chrono::{DateTime, Local};
@@ -94,6 +95,7 @@ pub struct CommitList {
 	last_selected_commit: Option<CommitId>,
 	external_focus: bool,
 	local_queue: SharedLocalQueue,
+	path_filter: String,
 }
 
 impl CommitList {
@@ -155,6 +157,7 @@ impl CommitList {
 			last_selected_commit: None,
 			external_focus: true,
 			local_queue: create_local_queue(),
+			path_filter: String::new(),
 		}
 	}
 
@@ -243,6 +246,14 @@ impl CommitList {
 		&mut self.items
 	}
 
+	pub fn get_path_filter(&self) -> Option<LogWalkerFilter> {
+		if self.path_filter.is_empty() {
+			None
+		} else {
+			Some(filter_by_path(self.path_filter.clone()))
+		}
+	}
+
 	pub fn get_filter(&self) -> Option<LogWalkerFilter> {
 		if self.filter_field.is_visible()
 			&& !self.filter_field.get_text().is_empty()
@@ -252,11 +263,10 @@ impl CommitList {
 			let filter_author = self.filter_options.author;
 			let filter_msg = self.filter_options.message;
 			Some(std::sync::Arc::new(Box::new(
-				move |repo,
-				      commit_id: &CommitId|
+				move |_repo,
+				      _commit_id: &CommitId,
+				      commit: &asyncgit::sync::Commit|
 				      -> Result<bool, asyncgit::Error> {
-					let commit =
-						repo.find_commit((*commit_id).into())?;
 					if filter_author
 						&& commit
 							.author()

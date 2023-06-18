@@ -13,6 +13,7 @@ use crate::{
 use anyhow::Result;
 use asyncgit::{
 	asyncjob::AsyncSingleJob,
+	filter_compose_and,
 	sync::{self, CommitId, RepoPathRef},
 	AsyncBranchesJob, AsyncGitNotification, AsyncLog, AsyncTags,
 	CommitFilesParams, FetchStatus,
@@ -119,7 +120,22 @@ impl Revlog {
 		if self.is_visible() {
 			let filter_updated = self.list.filter_was_updated();
 			if filter_updated {
-				self.git_log.update_filter(self.list.get_filter());
+				let filter = self.list.get_filter();
+				let path_filter = self.list.get_path_filter();
+				match (filter.is_some(), path_filter.is_some()) {
+					(true, true) => self.git_log.update_filter(Some(
+						filter_compose_and!(filter, path_filter),
+					)),
+					(true, false) => {
+						self.git_log.update_filter(filter)
+					}
+					(false, true) => {
+						self.git_log.update_filter(path_filter)
+					}
+					(false, false) => {
+						self.git_log.update_filter(None)
+					}
+				}
 			}
 			let log_changed =
 				self.git_log.fetch()? == FetchStatus::Started;
