@@ -1121,6 +1121,12 @@ impl CommitList {
 						self.stop_filter();
 					} else {
 						self.update_path_filter(PathBuf::new());
+						if !self.marked.is_empty() {
+							self.marked.clear();
+							self.queue.push(InternalEvent::Update(
+								NeedsUpdate::ALL,
+							));
+						}
 					}
 					true
 				} else if key_match(
