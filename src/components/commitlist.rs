@@ -1284,6 +1284,10 @@ impl CommitList {
 		}
 		Ok(())
 	}
+
+	pub fn is_list_focused(&self) -> bool {
+		self.focused_field == Focused::List
+	}
 }
 
 impl DrawableComponent for CommitList {

@@ -171,6 +171,7 @@ impl Component for RevlogExtern {
 			if let Event::Key(k) = ev {
 				if key_match(k, self.key_config.keys.toggle_split) {
 					if self.compare_log.is_visible() {
+						self.compare_log.clear_marked();
 						self.compare_log.hide();
 						self.set_focus(Focus::MainLog);
 					} else {
@@ -194,6 +195,7 @@ impl Component for RevlogExtern {
 					self.set_focus(self.focused.get_next());
 					return Ok(EventState::Consumed);
 				} else if self.focused == Focus::CompareLog
+					&& self.compare_log.is_list_focused()
 					&& key_match(
 						k,
 						self.key_config.keys.select_branch,

@@ -344,6 +344,14 @@ impl Revlog {
 			));
 		}
 	}
+
+	pub fn is_list_focused(&self) -> bool {
+		self.list.is_list_focused()
+	}
+
+	pub fn clear_marked(&mut self) {
+		self.list.clear_marked();
+	}
 }
 
 impl DrawableComponent for Revlog {
