@@ -4,6 +4,18 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use which::which;
 
+fn exec_paste_with_args(
+	command: &str,
+	args: &[&str],
+) -> Result<String> {
+	let binary = which(command)
+		.ok()
+		.unwrap_or_else(|| PathBuf::from(command));
+
+	let process = Command::new(binary).args(args).output()?;
+	Ok(String::from_utf8_lossy(&process.stdout).into_owned())
+}
+
 fn exec_copy_with_args(
 	command: &str,
 	args: &[&str],
@@ -74,6 +86,25 @@ pub fn copy_string(text: &str) -> Result<()> {
 	Ok(())
 }
 
+#[cfg(all(target_family = "unix", not(target_os = "macos")))]
+pub fn paste_string() -> Result<String> {
+	if std::env::var("WAYLAND_DISPLAY").is_ok() {
+		return exec_paste_with_args("wl-paste", &[]);
+	}
+
+	let r = exec_paste_with_args(
+		"xclip",
+		&["-selection", "clipboard", "-o"],
+	);
+
+	match r {
+		Err(_) => {
+			exec_paste_with_args("xsel", &["--clipboard", "-o"])
+		}
+		Ok(x) => Ok(x),
+	}
+}
+
 #[cfg(any(target_os = "macos", windows))]
 fn exec_copy(command: &str, text: &str) -> Result<()> {
 	exec_copy_with_args(command, &[], text, true)
@@ -87,4 +118,12 @@ pub fn copy_string(text: &str) -> Result<()> {
 #[cfg(windows)]
 pub fn copy_string(text: &str) -> Result<()> {
 	exec_copy("clip", text)
+}
+
+#[cfg(windows)]
+pub fn paste_string(text: &str) -> Result<String> {
+	exec_copy_with_args(
+		"powershell",
+		&["-command", "'Get-Clipboard'"],
+	)
 }

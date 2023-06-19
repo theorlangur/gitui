@@ -1,3 +1,4 @@
+use crate::clipboard;
 use crate::keys::key_match;
 use crate::strings::symbol;
 use crate::ui::Size;
@@ -450,6 +451,30 @@ impl Component for TextInputComponent {
 					KeyCode::Char(c) if !is_ctrl => {
 						self.msg.insert(self.cursor_position, c);
 						self.incr_cursor();
+						return Ok(EventState::Consumed);
+					}
+					KeyCode::Char('v') if is_ctrl => {
+						if let Ok(s) = clipboard::paste_string()
+							.and_then(|i| Ok(i.replace("\n", " ")))
+						{
+							let trimmed = s.trim();
+							let mut len = trimmed.chars().count();
+							self.msg.insert_str(
+								self.cursor_position,
+								trimmed,
+							);
+
+							while len > 0 {
+								if let Some(pos) =
+									self.next_char_position()
+								{
+									self.cursor_position = pos;
+								} else {
+									break;
+								}
+								len -= 1;
+							}
+						}
 						return Ok(EventState::Consumed);
 					}
 					KeyCode::Delete if is_ctrl => {
