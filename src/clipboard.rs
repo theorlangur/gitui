@@ -121,9 +121,6 @@ pub fn copy_string(text: &str) -> Result<()> {
 }
 
 #[cfg(windows)]
-pub fn paste_string(text: &str) -> Result<String> {
-	exec_copy_with_args(
-		"powershell",
-		&["-command", "'Get-Clipboard'"],
-	)
+pub fn paste_string() -> Result<String> {
+	exec_paste_with_args("powershell", &["-command", "Get-Clipboard"])
 }
