@@ -312,7 +312,7 @@ impl CommitList {
 		//implement
 		let repo = self.repo.borrow();
 		//save current head
-		for i in &self.marked {
+		for i in self.marked.iter().rev() {
 			if let Err(err) = cherrypick(&repo, i.1.clone(), true) {
 				//rollback
 				//show error
