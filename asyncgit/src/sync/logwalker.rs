@@ -73,15 +73,13 @@ macro_rules! filter_compose_and {
 }
 
 ///
-pub fn filter_by_path(xpath: String) -> LogWalkerFilter {
+pub fn filter_by_path(path: String) -> LogWalkerFilter {
 	Arc::new(Box::new(
 		move |repo: &Repository,
 		      _commit_id: &CommitId,
 		      commit: &Commit|
 		      -> Result<bool> {
-			let path = xpath.trim_start_matches("./");
 			let diff = get_commit_diff_by_path(repo, commit, &path)?;
-
 			let contains_file = diff.deltas().len() > 0;
 
 			Ok(contains_file)

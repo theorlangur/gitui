@@ -261,10 +261,15 @@ impl CommitList {
 	pub fn get_path_filter(&self) -> Option<LogWalkerFilter> {
 		if self.path_filter.as_os_str().is_empty() {
 			None
-		} else if let Some(p) = self.path_filter.to_str() {
-			Some(filter_by_path(p.to_string()))
 		} else {
-			None
+			let p: String = self
+				.path_filter
+				.iter()
+				.skip_while(|i| i.to_str().unwrap_or("") == ".")
+				.map(|i| i.to_str().unwrap_or(""))
+				.collect::<Vec<_>>()
+				.join(std::path::MAIN_SEPARATOR_STR);
+			Some(filter_by_path(p))
 		}
 	}
 

@@ -31,13 +31,13 @@ pub fn repo_files(
 		.into_iter()
 		.filter_map(|e| e.ok())
 		.filter(|e| {
+			let _p = e.path().to_str();
+			let _f = e.file_type();
 			(with_directories || !e.file_type().is_dir())
-				&& !e
-					.path()
-					.to_str()
-					.unwrap_or("")
-					.trim_start_matches("./")
-					.starts_with('.')
+				&& !e.path().iter().any(|i| {
+					let s = i.to_str().unwrap_or("");
+					s.len() > 1 && s.starts_with(".")
+				})
 		})
 		.map(|e| TreeFile {
 			path: e.path().to_path_buf(),
