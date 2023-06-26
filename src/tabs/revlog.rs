@@ -118,6 +118,7 @@ impl Revlog {
 	///
 	pub fn update(&mut self) -> Result<()> {
 		if self.is_visible() {
+			self.list.update()?;
 			let filter_updated = self.list.filter_was_updated();
 			if filter_updated {
 				let filter = self.list.get_filter();
@@ -225,7 +226,6 @@ impl Revlog {
 					&tags,
 				)?;
 			}
-			self.list.update()?;
 		}
 
 		Ok(())
