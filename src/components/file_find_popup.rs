@@ -25,6 +25,12 @@ use ratatui::{
 };
 use std::borrow::Cow;
 
+#[derive(Eq, PartialEq)]
+enum Focus {
+	Input,
+	List,
+}
+
 pub struct FileFindPopup {
 	queue: Queue,
 	visible: bool,
@@ -37,6 +43,7 @@ pub struct FileFindPopup {
 	files_filtered: Vec<(usize, Vec<usize>)>,
 	key_config: SharedKeyConfig,
 	response_queue: Option<SharedLocalQueue>,
+	focused: Focus,
 }
 
 impl FileFindPopup {
@@ -54,6 +61,7 @@ impl FileFindPopup {
 			false,
 		);
 		find_text.embed();
+		find_text.set_selected(true);
 
 		Self {
 			queue: queue.clone(),
@@ -67,6 +75,7 @@ impl FileFindPopup {
 			key_config,
 			selection: 0,
 			response_queue: None,
+			focused: Focus::Input,
 		}
 	}
 
@@ -173,6 +182,10 @@ impl FileFindPopup {
 		let new_selection = match move_type {
 			ScrollType::Up => self.selection.saturating_sub(1),
 			ScrollType::Down => self.selection.saturating_add(1),
+			ScrollType::Home => 0,
+			ScrollType::End => {
+				self.files_filtered.len().saturating_sub(1)
+			}
 			_ => self.selection,
 		};
 
@@ -186,6 +199,22 @@ impl FileFindPopup {
 		}
 
 		false
+	}
+
+	fn list_event(
+		&mut self,
+		key: &crossterm::event::KeyEvent,
+	) -> Result<EventState> {
+		if key_match(key, self.key_config.keys.move_down) {
+			self.move_selection(ScrollType::Down);
+		} else if key_match(key, self.key_config.keys.move_up) {
+			self.move_selection(ScrollType::Up);
+		} else if key_match(key, self.key_config.keys.home) {
+			self.move_selection(ScrollType::Home);
+		} else if key_match(key, self.key_config.keys.end) {
+			self.move_selection(ScrollType::End);
+		}
+		Ok(EventState::Consumed)
 	}
 }
 
@@ -253,11 +282,18 @@ impl DrawableComponent for FileFindPopup {
 
 				let height = usize::from(chunks[1].height);
 				let width = usize::from(chunks[1].width);
+				let items_height = height - 1;
+				let skip = if items_height > 0 {
+					(self.selection / items_height) * items_height
+				} else {
+					0
+				};
 
 				let items = self
 					.files_filtered
 					.iter()
-					.take(height)
+					.skip(skip)
+					.take(items_height)
 					.map(|(idx, indicies)| {
 						let selected = self
 							.selected_index
@@ -291,7 +327,8 @@ impl DrawableComponent for FileFindPopup {
 					Block::default()
 						.title(Span::styled(
 							title,
-							self.theme.title(true),
+							self.theme
+								.title(self.focused == Focus::List),
 						))
 						.borders(Borders::TOP),
 					items,
@@ -310,7 +347,13 @@ impl Component for FileFindPopup {
 	) -> CommandBlocking {
 		if self.is_visible() || force_all {
 			out.push(CommandInfo::new(
-				strings::commands::scroll_popup(&self.key_config),
+				strings::commands::diff_home_end(&self.key_config),
+				true,
+				self.focused == Focus::List,
+			));
+
+			out.push(CommandInfo::new(
+				strings::commands::switch_focus(&self.key_config),
 				true,
 				true,
 			));
@@ -335,24 +378,35 @@ impl Component for FileFindPopup {
 			if let Event::Key(key) = event {
 				if key_match(key, self.key_config.keys.exit_popup) {
 					self.hide();
+				} else if key_match(
+					key,
+					self.key_config.keys.toggle_workarea,
+				) {
+					self.focused = match self.focused {
+						Focus::Input => Focus::List,
+						Focus::List => Focus::Input,
+					};
+					self.find_text
+						.set_selected(self.focused == Focus::Input);
 				} else if key_match(key, self.key_config.keys.enter) {
 					self.finish_selection();
 					self.hide();
-				} else if key_match(
-					key,
-					self.key_config.keys.popup_down,
-				) {
-					self.move_selection(ScrollType::Down);
-				} else if key_match(
-					key,
-					self.key_config.keys.popup_up,
-				) {
-					self.move_selection(ScrollType::Up);
+				} else {
+					match self.focused {
+						Focus::Input => {
+							if self
+								.find_text
+								.event(event)?
+								.is_consumed()
+							{
+								self.update_query();
+							}
+						}
+						Focus::List => {
+							self.list_event(key)?;
+						}
+					}
 				}
-			}
-
-			if self.find_text.event(event)?.is_consumed() {
-				self.update_query();
 			}
 
 			return Ok(EventState::Consumed);
