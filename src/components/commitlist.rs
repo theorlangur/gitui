@@ -22,7 +22,7 @@ use anyhow::Result;
 use asyncgit::sync::branch::checkout_branch_cmd;
 use asyncgit::sync::{
 	checkout_commit, cherrypick, filter_by_path, get_commit_info,
-	BranchDetails, BranchInfo, CommitId, LogWalkerFilter,
+	get_head, BranchDetails, BranchInfo, CommitId, LogWalkerFilter,
 	RepoPathRef, Tags,
 };
 
@@ -1163,24 +1163,42 @@ impl CommitList {
 					k,
 					self.key_config.keys.fuzzy_find,
 				) {
-					let r = asyncgit::sync::repo_files(
-						&self.repo.borrow(),
-						true,
-					);
+					let commit = get_head(&self.repo.borrow());
+					match commit {
+						Ok(commit) => {
+							let r = asyncgit::sync::tree_files(
+								&self.repo.borrow(),
+								commit,
+								true,
+							);
 
-					match r {
-						Ok(v) => self.queue.push(
-							InternalEvent::OpenFileFinder(
-								v,
-								Some(self.local_queue.clone()),
-							),
-						),
-						Err(e) => self.queue.push(
-							InternalEvent::ShowErrorMsg(format!(
-								"Could not get file list: {}",
-								e
-							)),
-						),
+							match r {
+								Ok(v) => self.queue.push(
+									InternalEvent::OpenFileFinder(
+										v,
+										Some(
+											self.local_queue.clone(),
+										),
+									),
+								),
+								Err(e) => self.queue.push(
+									InternalEvent::ShowErrorMsg(
+										format!(
+										"Could not get file list: {}",
+										e
+									),
+									),
+								),
+							}
+						}
+						Err(e) => {
+							self.queue.push(
+								InternalEvent::ShowErrorMsg(format!(
+									"Could not get file list: {}",
+									e
+								)),
+							);
+						}
 					}
 					true
 				} else {

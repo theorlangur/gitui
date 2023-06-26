@@ -7,12 +7,13 @@ use git2::{Oid, Repository, Tree};
 use scopetime::scope_time;
 use std::{
 	cmp::Ordering,
+	collections::HashSet,
 	path::{Path, PathBuf},
 };
 use walkdir::WalkDir;
 
 /// `tree_files` returns a list of `FileTree`
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct TreeFile {
 	/// path of this file
 	pub path: PathBuf,
@@ -53,6 +54,7 @@ pub fn repo_files(
 pub fn tree_files(
 	repo_path: &RepoPath,
 	commit: CommitId,
+	with_directories: bool,
 ) -> Result<Vec<TreeFile>> {
 	scope_time!("tree_files");
 
@@ -61,42 +63,32 @@ pub fn tree_files(
 	let commit = repo.find_commit(commit.into())?;
 	let tree = commit.tree()?;
 
-	let mut files: Vec<TreeFile> = Vec::new();
+	let mut hfiles: HashSet<TreeFile> = HashSet::new();
 
-	tree_recurse(&repo, &PathBuf::from("./"), &tree, &mut files)?;
+	tree_recurse(&repo, &PathBuf::from("./"), &tree, &mut hfiles)?;
 
+	if with_directories {
+		let mut hdirs: HashSet<TreeFile> = HashSet::new();
+		hfiles.iter().for_each(|i| {
+			let mut p = i.path.clone();
+			p.pop();
+			hdirs.insert(TreeFile {
+				path: p,
+				filemode: 0,
+				id: Oid::zero(),
+			});
+		});
+		hfiles.extend(hdirs);
+	}
+
+	let mut files = hfiles.into_iter().collect::<Vec<_>>();
 	sort_file_list(&mut files);
 
 	Ok(files)
 }
 
 fn sort_file_list(files: &mut [TreeFile]) {
-	files.sort_by(|a, b| path_cmp(&a.path, &b.path));
-}
-
-// applies topologically order on paths sorting
-fn path_cmp(a: &Path, b: &Path) -> Ordering {
-	let mut comp_a = a.components().peekable();
-	let mut comp_b = b.components().peekable();
-
-	loop {
-		let a = comp_a.next();
-		let b = comp_b.next();
-
-		let a_is_file = comp_a.peek().is_none();
-		let b_is_file = comp_b.peek().is_none();
-
-		if a_is_file && !b_is_file {
-			return Ordering::Greater;
-		} else if !a_is_file && b_is_file {
-			return Ordering::Less;
-		}
-
-		let cmp = a.cmp(&b);
-		if cmp != Ordering::Equal {
-			return cmp;
-		}
-	}
+	files.sort_by(|a, b| a.path.cmp(&b.path));
 }
 
 /// will only work on utf8 content
@@ -124,10 +116,8 @@ fn tree_recurse(
 	repo: &Repository,
 	path: &Path,
 	tree: &Tree,
-	out: &mut Vec<TreeFile>,
+	out: &mut HashSet<TreeFile>,
 ) -> Result<()> {
-	out.reserve(tree.len());
-
 	for e in tree {
 		let p = String::from_utf8_lossy(e.name_bytes());
 		let path = path.join(p.to_string());
@@ -135,7 +125,7 @@ fn tree_recurse(
 			Some(git2::ObjectType::Blob) => {
 				let id = e.id();
 				let filemode = e.filemode();
-				out.push(TreeFile { path, filemode, id });
+				out.insert(TreeFile { path, filemode, id });
 			}
 			Some(git2::ObjectType::Tree) => {
 				let obj = e.to_object(repo)?;
@@ -164,7 +154,7 @@ mod tests {
 		let c1 =
 			write_commit_file(&repo, "test.txt", "content", "c1");
 
-		let files = tree_files(repo_path, c1).unwrap();
+		let files = tree_files(repo_path, c1, false).unwrap();
 
 		assert_eq!(files.len(), 1);
 		assert_eq!(files[0].path, PathBuf::from("./test.txt"));
@@ -176,7 +166,7 @@ mod tests {
 			tree_file_content(repo_path, &files[0]).unwrap();
 		assert_eq!(&content, "content");
 
-		let files_c2 = tree_files(repo_path, c2).unwrap();
+		let files_c2 = tree_files(repo_path, c2, false).unwrap();
 
 		assert_eq!(files_c2.len(), 1);
 		assert_ne!(files_c2[0], files[0]);
@@ -252,28 +242,6 @@ mod tests {
 				String::from("afolder/file"),
 				String::from("bfolder/sub/file"),
 			]
-		);
-	}
-
-	#[test]
-	fn test_path_cmp() {
-		assert_eq!(
-			path_cmp(
-				&PathBuf::from("bfolder/sub/file"),
-				&PathBuf::from("afolder/file")
-			),
-			Ordering::Greater
-		);
-	}
-
-	#[test]
-	fn test_path_file_cmp() {
-		assert_eq!(
-			path_cmp(
-				&PathBuf::from("a"),
-				&PathBuf::from("afolder/file")
-			),
-			Ordering::Greater
 		);
 	}
 }

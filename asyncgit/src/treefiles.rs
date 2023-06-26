@@ -63,7 +63,7 @@ impl AsyncJob for AsyncTreeFilesJob {
 		if let Ok(mut state) = self.state.lock() {
 			*state = state.take().map(|state| match state {
 				JobState::Request { commit, repo } => {
-					let files = tree_files(&repo, commit);
+					let files = tree_files(&repo, commit, false);
 
 					JobState::Response(FileTreeResult {
 						commit,
