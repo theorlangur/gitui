@@ -6,7 +6,6 @@ use crate::{
 use git2::{Oid, Repository, Tree};
 use scopetime::scope_time;
 use std::{
-	cmp::Ordering,
 	collections::HashSet,
 	path::{Path, PathBuf},
 };
