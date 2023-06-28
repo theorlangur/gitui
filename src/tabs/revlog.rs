@@ -12,11 +12,9 @@ use crate::{
 };
 use anyhow::Result;
 use asyncgit::{
-	asyncjob::AsyncSingleJob,
 	filter_compose_and,
-	sync::{self, CommitId, RepoPathRef},
-	AsyncBranchesJob, AsyncGitNotification, AsyncLog, AsyncTags,
-	CommitFilesParams, FetchStatus,
+	sync::{self, BranchInfo, CommitId, RepoPathRef, Tags},
+	AsyncGitNotification, AsyncLog, CommitFilesParams, FetchStatus,
 };
 use crossbeam_channel::Sender;
 use crossterm::event::Event;
@@ -25,7 +23,6 @@ use ratatui::{
 	layout::{Constraint, Direction, Layout, Rect},
 	Frame,
 };
-use std::time::Duration;
 use sync::CommitTags;
 
 const SLICE_SIZE: usize = 1200;
@@ -36,9 +33,6 @@ pub struct Revlog {
 	commit_details: CommitDetailsComponent,
 	list: CommitList,
 	git_log: AsyncLog,
-	git_tags: AsyncTags,
-	git_local_branches: AsyncSingleJob<AsyncBranchesJob>,
-	git_remote_branches: AsyncSingleJob<AsyncBranchesJob>,
 	queue: Queue,
 	visible: bool,
 	key_config: SharedKeyConfig,
@@ -76,9 +70,6 @@ impl Revlog {
 				sender,
 				None,
 			),
-			git_tags: AsyncTags::new(repo.borrow().clone(), sender),
-			git_local_branches: AsyncSingleJob::new(sender.clone()),
-			git_remote_branches: AsyncSingleJob::new(sender.clone()),
 			visible: false,
 			key_config,
 			target_branch: None,
@@ -109,10 +100,11 @@ impl Revlog {
 	///
 	pub fn any_work_pending(&self) -> bool {
 		self.git_log.is_pending()
-			|| self.git_tags.is_pending()
-			|| self.git_local_branches.is_pending()
-			|| self.git_remote_branches.is_pending()
 			|| self.commit_details.any_work_pending()
+	}
+
+	pub fn needs_branch_update(&mut self) -> bool {
+		self.list.needs_branch_update()
 	}
 
 	///
@@ -215,8 +207,6 @@ impl Revlog {
 				self.fetch_commits()?;
 			}
 
-			self.git_tags.request(Duration::from_secs(3), false)?;
-
 			if self.commit_details.is_visible() {
 				let commit = self.selected_commit();
 				let tags = self.selected_commit_tags(&commit);
@@ -231,6 +221,19 @@ impl Revlog {
 		Ok(())
 	}
 
+	pub fn set_local_branches(&mut self, b: Vec<BranchInfo>) {
+		self.list.set_local_branches(b);
+	}
+
+	pub fn set_remote_branches(&mut self, b: Vec<BranchInfo>) {
+		self.list.set_remote_branches(b);
+	}
+
+	///
+	pub fn set_tags(&mut self, tags: Tags) {
+		self.list.set_tags(tags);
+	}
+
 	///
 	pub fn update_git(
 		&mut self,
@@ -240,37 +243,6 @@ impl Revlog {
 			match ev {
 				AsyncGitNotification::CommitFiles
 				| AsyncGitNotification::Log => self.update()?,
-				AsyncGitNotification::Tags => {
-					if let Some(tags) = self.git_tags.last()? {
-						self.list.set_tags(tags);
-						self.update()?;
-					}
-				}
-				AsyncGitNotification::Branches => {
-					if let Some(local_branches) =
-						self.git_local_branches.take_last()
-					{
-						if let Some(Ok(local_branches)) =
-							local_branches.result()
-						{
-							self.list
-								.set_local_branches(local_branches);
-							self.update()?;
-						}
-					}
-
-					if let Some(remote_branches) =
-						self.git_remote_branches.take_last()
-					{
-						if let Some(Ok(remote_branches)) =
-							remote_branches.result()
-						{
-							self.list
-								.set_remote_branches(remote_branches);
-							self.update()?;
-						}
-					}
-				}
 				_ => (),
 			}
 		}
@@ -659,16 +631,6 @@ impl Component for Revlog {
 	fn show(&mut self) -> Result<()> {
 		self.visible = true;
 		self.list.clear();
-
-		self.git_local_branches.spawn(AsyncBranchesJob::new(
-			self.repo.borrow().clone(),
-			true,
-		));
-
-		self.git_remote_branches.spawn(AsyncBranchesJob::new(
-			self.repo.borrow().clone(),
-			false,
-		));
 
 		self.update()?;
 

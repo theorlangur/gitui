@@ -97,6 +97,7 @@ pub struct CommitList {
 	external_focus: bool,
 	local_queue: SharedLocalQueue,
 	path_filter: PathBuf,
+	branches_update_needed: bool,
 }
 
 impl CommitList {
@@ -159,6 +160,7 @@ impl CommitList {
 			external_focus: true,
 			local_queue: create_local_queue(),
 			path_filter: PathBuf::new(),
+			branches_update_needed: false,
 		}
 	}
 
@@ -176,6 +178,12 @@ impl CommitList {
 		Ok(())
 	}
 
+	pub fn needs_branch_update(&mut self) -> bool {
+		let v = self.branches_update_needed;
+		self.branches_update_needed = false;
+		v
+	}
+
 	fn process_local_queue(&mut self) {
 		loop {
 			//suboptimal...
@@ -187,9 +195,11 @@ impl CommitList {
 					LocalEvent::Confirmed(ref s)
 						if s == "cherrypick" =>
 					{
+						self.branches_update_needed = true;
 						self.cherrypick_marked()
 					}
 					LocalEvent::Confirmed(ref s) if s == "drop" => {
+						self.branches_update_needed = true;
 						self.drop_marked()
 					}
 					LocalEvent::PickFile(p) => {
@@ -1059,6 +1069,9 @@ impl CommitList {
 					self.key_config.keys.delete_generic,
 				) {
 					if self.marked.is_empty() {
+						self.mark();
+					}
+					if self.marked.is_empty() {
 						self.queue.push(InternalEvent::ShowErrorMsg(
 							String::from(
 								"No commits selected to drop",
@@ -1082,6 +1095,9 @@ impl CommitList {
 					k,
 					self.key_config.keys.cherrypick,
 				) {
+					if self.marked.is_empty() {
+						self.mark();
+					}
 					if self.marked.is_empty() {
 						self.queue.push(InternalEvent::ShowErrorMsg(
 							String::from(

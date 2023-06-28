@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::{
 	components::{
 		visibility_blocking, CommandBlocking, CommandInfo, Component,
@@ -9,8 +11,9 @@ use crate::{
 };
 use anyhow::Result;
 use asyncgit::{
+	asyncjob::AsyncSingleJob,
 	sync::{CommitId, RepoPathRef},
-	AsyncGitNotification,
+	AsyncBranchesJob, AsyncGitNotification, AsyncTags,
 };
 use crossbeam_channel::Sender;
 use crossterm::event::Event;
@@ -47,6 +50,9 @@ pub struct RevlogExtern {
 	key_config: SharedKeyConfig,
 	focused: Focus,
 	local_queue: SharedLocalQueue,
+	git_local_branches: AsyncSingleJob<AsyncBranchesJob>,
+	git_remote_branches: AsyncSingleJob<AsyncBranchesJob>,
+	git_tags: AsyncTags,
 }
 
 impl RevlogExtern {
@@ -61,6 +67,9 @@ impl RevlogExtern {
 		Self {
 			repo: repo.clone(),
 			queue: queue.clone(),
+			git_local_branches: AsyncSingleJob::new(sender.clone()),
+			git_remote_branches: AsyncSingleJob::new(sender.clone()),
+			git_tags: AsyncTags::new(repo.borrow().clone(), sender),
 			main_log: Revlog::new(
 				repo,
 				queue,
@@ -89,7 +98,10 @@ impl RevlogExtern {
 
 	///
 	pub fn any_work_pending(&self) -> bool {
-		self.main_log.any_work_pending()
+		self.git_local_branches.is_pending()
+			|| self.git_remote_branches.is_pending()
+			|| self.git_tags.is_pending()
+			|| self.main_log.any_work_pending()
 			|| self.compare_log.any_work_pending()
 	}
 
@@ -107,12 +119,32 @@ impl RevlogExtern {
 		}
 	}
 
+	fn trigger_branch_update(&mut self) {
+		self.git_local_branches.spawn(AsyncBranchesJob::new(
+			self.repo.borrow().clone(),
+			true,
+		));
+
+		self.git_remote_branches.spawn(AsyncBranchesJob::new(
+			self.repo.borrow().clone(),
+			false,
+		));
+	}
+
 	///
 	pub fn update(&mut self) -> Result<()> {
 		if self.is_visible() {
 			self.process_local_queue();
 			self.main_log.update()?;
 			self.compare_log.update()?;
+
+			self.git_tags.request(Duration::from_secs(3), false)?;
+
+			let need1 = self.main_log.needs_branch_update();
+			let need2 = self.compare_log.needs_branch_update();
+			if need1 || need2 {
+				self.trigger_branch_update();
+			}
 		}
 
 		Ok(())
@@ -124,8 +156,46 @@ impl RevlogExtern {
 		ev: AsyncGitNotification,
 	) -> Result<()> {
 		if self.visible {
-			self.main_log.update_git(ev)?;
-			self.compare_log.update_git(ev)?;
+			if ev == AsyncGitNotification::Branches {
+				if let Some(local_branches) =
+					self.git_local_branches.take_last()
+				{
+					if let Some(Ok(local_branches)) =
+						local_branches.result()
+					{
+						self.main_log.set_local_branches(
+							local_branches.clone(),
+						);
+						self.compare_log
+							.set_local_branches(local_branches);
+						self.update()?;
+					}
+				}
+
+				if let Some(remote_branches) =
+					self.git_remote_branches.take_last()
+				{
+					if let Some(Ok(remote_branches)) =
+						remote_branches.result()
+					{
+						self.main_log.set_remote_branches(
+							remote_branches.clone(),
+						);
+						self.compare_log
+							.set_remote_branches(remote_branches);
+						self.update()?;
+					}
+				}
+			} else if ev == AsyncGitNotification::Tags {
+				if let Some(tags) = self.git_tags.last()? {
+					self.main_log.set_tags(tags.clone());
+					self.compare_log.set_tags(tags);
+					self.update()?;
+				}
+			} else {
+				self.main_log.update_git(ev)?;
+				self.compare_log.update_git(ev)?;
+			}
 		}
 
 		Ok(())
@@ -246,6 +316,7 @@ impl Component for RevlogExtern {
 	fn show(&mut self) -> Result<()> {
 		self.visible = true;
 		self.main_log.show()?;
+		self.trigger_branch_update();
 		self.update()?;
 
 		Ok(())
