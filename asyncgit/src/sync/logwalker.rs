@@ -73,12 +73,15 @@ macro_rules! filter_compose_and {
 }
 
 ///
-pub fn filter_by_path(path: String) -> LogWalkerFilter {
+pub fn filter_by_path(path: String, skip_merge: bool) -> LogWalkerFilter {
 	Arc::new(Box::new(
 		move |repo: &Repository,
 		      _commit_id: &CommitId,
 		      commit: &Commit|
 		      -> Result<bool> {
+            if skip_merge && commit.parent_count() > 1 {
+                return Ok(false);
+            }
 			let diff = get_commit_diff_by_path(repo, commit, &path)?;
 			let contains_file = diff.deltas().len() > 0;
 

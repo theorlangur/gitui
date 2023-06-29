@@ -279,7 +279,7 @@ impl CommitList {
 				.map(|i| i.to_str().unwrap_or(""))
 				.collect::<Vec<_>>()
 				.join(std::path::MAIN_SEPARATOR_STR);
-			Some(filter_by_path(p))
+			Some(filter_by_path(p, true))
 		}
 	}
 
