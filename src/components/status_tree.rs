@@ -7,6 +7,7 @@ use super::{
 };
 use crate::{
 	components::{CommandInfo, Component, EventState},
+	is_among_tracked_lfs_files,
 	keys::{key_match, SharedKeyConfig},
 	queue::{InternalEvent, NeedsUpdate, Queue, StackablePopupOpen},
 	strings::{self, order},
@@ -161,6 +162,7 @@ impl StatusTreeComponent {
 		indent: usize,
 		visible: bool,
 		file_item_kind: &FileTreeItemKind,
+		lfs_tracked: bool,
 		width: u16,
 		selected: bool,
 		theme: &'b SharedTheme,
@@ -184,16 +186,19 @@ impl StatusTreeComponent {
 					.and_then(std::ffi::OsStr::to_str)
 					.expect("invalid path.");
 
+				let lfs_indicator =
+					if lfs_tracked { 'L' } else { ' ' };
 				let txt = if selected {
 					format!(
-						"{} {}{:w$}",
+						"{}{} {}{:w$}",
+						lfs_indicator,
 						status_char,
 						indent_str,
 						file,
 						w = width as usize
 					)
 				} else {
-					format!("{status_char} {indent_str}{file}")
+					format!( "{lfs_indicator}{status_char} {indent_str}{file}")
 				};
 
 				Some(Span::styled(
@@ -255,6 +260,9 @@ impl StatusTreeComponent {
 				indent: item.info.indent,
 				visible: item.info.visible,
 				item_kind: &item.kind,
+				lfs_tracked: is_among_tracked_lfs_files(
+					&item.info.full_path,
+				),
 			});
 
 			let mut idx_temp = index;
@@ -325,6 +333,7 @@ struct TextDrawInfo<'a> {
 	indent: u8,
 	visible: bool,
 	item_kind: &'a FileTreeItemKind,
+	lfs_tracked: bool,
 }
 
 impl DrawableComponent for StatusTreeComponent {
@@ -380,6 +389,7 @@ impl DrawableComponent for StatusTreeComponent {
 						draw_text_info.indent as usize,
 						draw_text_info.visible,
 						draw_text_info.item_kind,
+						draw_text_info.lfs_tracked,
 						r.width,
 						self.show_selection && select == index,
 						&self.theme,

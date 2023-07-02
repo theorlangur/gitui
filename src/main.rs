@@ -1,4 +1,3 @@
-#![forbid(unsafe_code)]
 #![deny(
 	unused_imports,
 	unused_must_use,
@@ -78,7 +77,9 @@ use spinner::Spinner;
 use std::{
 	cell::RefCell,
 	io::{self, Write},
-	panic, process,
+	panic,
+	path::PathBuf,
+	process,
 	time::{Duration, Instant},
 };
 use ui::style::Theme;
@@ -256,6 +257,14 @@ fn main() -> Result<()> {
 	Ok(())
 }
 
+static mut LFS_FILES: Vec<PathBuf> = vec![];
+pub fn is_among_tracked_lfs_files(p: &str) -> bool {
+	let files = unsafe { &LFS_FILES };
+
+	let p = std::path::Path::new(p);
+	files.iter().find(|i| *i == p).is_some()
+}
+
 fn run_app(
 	app_start: Instant,
 	repo: RepoPath,
@@ -265,6 +274,20 @@ fn run_app(
 	updater: Updater,
 	terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
 ) -> Result<QuitState, anyhow::Error> {
+	unsafe {
+		LFS_FILES = process::Command::new("git")
+			.args(["lfs", "ls-files"])
+			.output()
+			.map_or(Vec::new(), |o| {
+				std::str::from_utf8(o.stdout.as_slice())
+					.unwrap_or_default()
+					.split('\n')
+					.skip_while(|i| i.len() == 0)
+					.map(PathBuf::from)
+					.collect()
+			});
+	}
+
 	let (tx_git, rx_git) = unbounded();
 	let (tx_app, rx_app) = unbounded();
 
