@@ -5,13 +5,14 @@ use super::{
 };
 use crate::{
 	components::{CommandInfo, Component, EventState},
+	is_among_tracked_lfs_files,
 	keys::{key_match, SharedKeyConfig},
 	options::SharedOptions,
 	queue::{Action, InternalEvent, NeedsUpdate, Queue, ResetItem},
 	strings, try_or_popup,
 	ui::style::SharedTheme,
 };
-use anyhow::Result;
+use anyhow::{bail, Result};
 use asyncgit::{
 	sync::{self, RepoPathRef},
 	StatusItem, StatusItemType,
@@ -100,12 +101,41 @@ impl ChangesComponent {
 								path,
 							)?;
 						}
-						_ => sync::stage_add_file(
-							&self.repo.borrow(),
-							path,
-						)?,
+						_ => {
+							if is_among_tracked_lfs_files(
+								&tree_item.info.full_path,
+							) {
+								//fallback to 'git add'
+								let o =
+									std::process::Command::new("git")
+										.args([
+											"add",
+											&tree_item.info.full_path,
+										])
+										.output()?;
+								if !o.status.success() {
+									bail!(
+										"{}",
+										std::str::from_utf8(
+											o.stderr.as_slice()
+										)
+										.unwrap_or_default()
+									)
+								}
+							} else {
+								sync::stage_add_file(
+									&self.repo.borrow(),
+									path,
+								)?;
+							}
+						}
 					};
 				} else {
+					if is_among_tracked_lfs_files(
+						&tree_item.info.full_path,
+					) {
+						bail!("One of the files is LFS-tracked. Stage one by one")
+					}
 					let config =
 						self.options.borrow().status_show_untracked();
 

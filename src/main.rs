@@ -260,9 +260,7 @@ fn main() -> Result<()> {
 static mut LFS_FILES: Vec<PathBuf> = vec![];
 pub fn is_among_tracked_lfs_files(p: &str) -> bool {
 	let files = unsafe { &LFS_FILES };
-
-	let p = std::path::Path::new(p);
-	files.iter().find(|i| *i == p).is_some()
+	files.iter().find(|i| i.starts_with(p)).is_some()
 }
 
 fn run_app(
