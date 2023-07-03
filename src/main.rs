@@ -281,6 +281,12 @@ fn run_app(
 					.unwrap_or_default()
 					.split('\n')
 					.skip_while(|i| i.len() == 0)
+					.map(|i| {
+						i.split_ascii_whitespace()
+							.nth(2)
+							.unwrap_or_default()
+					})
+					.skip_while(|i| i.len() == 0)
 					.map(PathBuf::from)
 					.collect()
 			});
