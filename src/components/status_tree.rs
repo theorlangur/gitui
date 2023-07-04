@@ -64,6 +64,10 @@ impl StatusTreeComponent {
 		}
 	}
 
+	pub fn get_tree(&self) -> &StatusTree {
+		&self.tree
+	}
+
 	pub fn set_commit(&mut self, revision: Option<CommitId>) {
 		self.revision = revision;
 	}

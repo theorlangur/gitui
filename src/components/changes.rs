@@ -131,8 +131,13 @@ impl ChangesComponent {
 						}
 					};
 				} else {
-					if is_among_tracked_lfs_files(
+					if self.files.get_tree().check_all_files_for_path(
 						&tree_item.info.full_path,
+						&|i: &FileTreeItem| -> bool {
+							is_among_tracked_lfs_files(
+								&i.info.full_path,
+							)
+						},
 					) {
 						bail!("One of the files is LFS-tracked. Stage one by one")
 					}

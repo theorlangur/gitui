@@ -382,6 +382,24 @@ impl StatusTree {
 		);
 	}
 
+	pub fn check_all_files_for_path(
+		&self,
+		prefix: &str,
+		cb: &dyn Fn(&FileTreeItem) -> bool,
+	) -> bool {
+		self.tree
+			.items()
+			.iter()
+			.filter(|i| {
+				if let FileTreeItemKind::File(_) = &i.kind {
+					i.info.full_path.starts_with(prefix)
+				} else {
+					false
+				}
+			})
+			.any(cb)
+	}
+
 	fn update_visibility(
 		&mut self,
 		prefix: Option<&str>,
