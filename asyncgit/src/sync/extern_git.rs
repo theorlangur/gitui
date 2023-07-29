@@ -28,7 +28,7 @@ impl<'a> TempEditor<'a> {
 
 	#[cfg(unix)]
 	fn set_permissions(&mut self) -> Result<()> {
-        use std::os::unix::prelude::PermissionsExt;
+		use std::os::unix::prelude::PermissionsExt;
 		let mut perm = std::fs::metadata(self.cache_path.as_path())?
 			.permissions();
 		perm.set_mode(0o777);
@@ -265,6 +265,53 @@ impl IPCEvents {
 	}
 }
 
+struct TerminalState {
+	#[cfg(windows)]
+	handle: windows::Win32::Foundation::HANDLE,
+	#[cfg(windows)]
+	mode: windows::Win32::System::Console::CONSOLE_MODE,
+}
+
+impl TerminalState {
+	#[cfg(windows)]
+	pub fn capture() -> Self {
+		let mut console_mode =
+			windows::Win32::System::Console::CONSOLE_MODE::default();
+		let h: windows::Win32::Foundation::HANDLE;
+		unsafe {
+			h = windows::Win32::System::Console::GetStdHandle(
+				windows::Win32::System::Console::STD_OUTPUT_HANDLE,
+			)
+			.unwrap();
+			windows::Win32::System::Console::GetConsoleMode(
+				h,
+				&mut console_mode,
+			);
+		}
+		Self {
+			handle: h,
+			mode: console_mode,
+		}
+	}
+
+	#[cfg(not(windows))]
+	pub fn capture() -> Self {
+		{}
+	}
+}
+
+#[cfg(windows)]
+impl Drop for TerminalState {
+	fn drop(&mut self) {
+		unsafe {
+			windows::Win32::System::Console::SetConsoleMode(
+				self.handle,
+				self.mode,
+			);
+		}
+	}
+}
+
 ///
 pub fn rebase_interactive<F>(
 	repo: &str,
@@ -282,7 +329,7 @@ where
 	cmd.current_dir(repo)
 		.arg("-c")
 		.arg(format!(
-			"sequence.editor={}",
+			"sequence.editor='{}'",
 			sequence_editor.to_str().unwrap(),
 		))
 		.arg("-c")
@@ -293,6 +340,7 @@ where
 		.stdout(Stdio::null()) //muting output. TODO: redirect?
 		.stderr(Stdio::null());
 
+	let terminal_state = TerminalState::capture();
 	let events = IPCEvents::main(&event_id)?;
 	let mut child = cmd.spawn()?;
 	events.wait_connected_ready()?;
@@ -300,6 +348,7 @@ where
 	f(&todo_file)?;
 	events.signal_connected_shutdown()?;
 	child.wait()?;
+	drop(terminal_state);
 	Ok(())
 }
 
