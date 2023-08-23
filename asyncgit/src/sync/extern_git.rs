@@ -296,7 +296,7 @@ impl TerminalState {
 
 	#[cfg(not(windows))]
 	pub fn capture() -> Self {
-		{}
+		Self{}
 	}
 }
 
