@@ -6,7 +6,9 @@ return {
             name = "Debug",
             program="${workspaceFolder}/target/debug/gitui",
             args = {
-            }
+            },
+            terminal = "external",
+            externalConsole=true
         }
     }
 }
