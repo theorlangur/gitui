@@ -52,6 +52,7 @@ pub struct BlameFileComponent {
 	table_state: std::cell::Cell<TableState>,
 	key_config: SharedKeyConfig,
 	current_height: std::cell::Cell<usize>,
+	previous_request_stack: Vec<(BlameFileOpen, TableState)>,
 }
 impl DrawableComponent for BlameFileComponent {
 	fn draw<B: Backend>(
@@ -222,6 +223,19 @@ impl Component for BlameFileComponent {
 				} else if key_match(key, self.key_config.keys.page_up)
 				{
 					self.move_selection(ScrollType::PageUp);
+				} else if key_match(key, self.key_config.keys.generic_push)
+				{
+					let commit = self.selected_commit();
+					if commit.is_some() && self.open_request.is_some() {
+						self.push_request(BlameFileOpen{
+							file_path:self.open_request.as_ref().unwrap().file_path.clone(), 
+							commit_id: commit, 
+							selection: Some(0)}
+						);
+					}
+				} else if key_match(key, self.key_config.keys.generic_pop)
+				{
+					self.pop_back();
 				} else if key_match(
 					key,
 					self.key_config.keys.move_right,
@@ -295,6 +309,7 @@ impl BlameFileComponent {
 			table_state: std::cell::Cell::new(TableState::default()),
 			key_config,
 			current_height: std::cell::Cell::new(0),
+			previous_request_stack: Vec::new(),
 		}
 	}
 
@@ -317,6 +332,8 @@ impl BlameFileComponent {
 
 	///
 	pub fn open(&mut self, open: BlameFileOpen) -> Result<()> {
+		self.visible = true;
+
 		self.open_request = Some(open.clone());
 		self.params = Some(BlameParams {
 			file_path: open.file_path,
@@ -324,11 +341,41 @@ impl BlameFileComponent {
 		});
 		self.file_blame = None;
 		self.table_state.get_mut().select(Some(0));
-		self.visible = true;
 
 		self.update()?;
 
 		Ok(())
+	}
+
+	fn push_request(&mut self, open: BlameFileOpen)
+	{
+		if let Some(current_request) = self.open_request.as_mut() {
+			self.previous_request_stack.push((current_request.clone(), self.table_state.get_mut().clone()));
+		}
+		self.open_request = Some(open.clone());
+		self.params = Some(BlameParams {
+			file_path: open.file_path,
+			commit_id: open.commit_id,
+		});
+		self.file_blame = None;
+		self.table_state.get_mut().select(Some(0));
+
+		let _ = self.update();
+	}
+
+	fn pop_back(&mut self)
+	{
+		if let Some(prev) = self.previous_request_stack.pop() {
+			self.open_request = Some(prev.0.clone());
+			self.params = Some(BlameParams {
+				file_path: prev.0.file_path,
+				commit_id: prev.0.commit_id,
+			});
+			self.file_blame = None;
+			self.table_state = prev.1.into();
+
+			let _ = self.update();
+		}
 	}
 
 	///

@@ -143,6 +143,8 @@ pub struct KeysList {
 	pub toggle_split: GituiKeyEvent,
 	pub cherrypick: GituiKeyEvent,
 	pub fuzzy_find: GituiKeyEvent,
+	pub generic_push: GituiKeyEvent,
+	pub generic_pop: GituiKeyEvent,
 }
 
 #[rustfmt::skip]
@@ -249,6 +251,8 @@ impl Default for KeysList {
             toggle_split: GituiKeyEvent::new(KeyCode::Char('|'),  KeyModifiers::empty()),
             cherrypick: GituiKeyEvent::new(KeyCode::Char('c'),  KeyModifiers::empty()),
 			fuzzy_find: GituiKeyEvent::new(KeyCode::Char('f'),  KeyModifiers::empty()),
+			generic_push: GituiKeyEvent::new(KeyCode::Char('p'),  KeyModifiers::empty()),
+			generic_pop: GituiKeyEvent::new(KeyCode::Char('P'),  KeyModifiers::SHIFT),
 		}
 	}
 }
