@@ -122,9 +122,41 @@ pub struct LogWalker<'a> {
 	limit: usize,
 	repo: &'a Repository,
 	filter: Option<LogWalkerFilter>,
+	stopper: Option<LogWalkerFilter>,
+	filtered_limit: usize,
 }
 
 impl<'a> LogWalker<'a> {
+	///
+	pub fn new_with_start_by_path<Cb>(
+		repo:  &RepoPath,
+		start: Option<&CommitId>,
+		config: Cb,
+	) -> Result<Vec<CommitId>> 
+		where
+		Cb: FnOnce(LogWalker)->LogWalker
+	{
+		let r = crate::sync::repository::repo(repo)?;
+		let c = if let Some(start) = start {
+			r.find_commit(start.get_oid())?
+		} else {
+			r.head()?.peel_to_commit()?
+		};
+		let mut commits = BinaryHeap::with_capacity(10);
+		commits.push(TimeOrderedCommit(c));
+		let mut walker = LogWalker {
+			commits,
+			limit: 0,
+			visited: HashSet::with_capacity(1000),
+			repo: &r,
+			filter: None,
+			stopper: None,
+			filtered_limit: 0
+		};
+		walker = config(walker);
+		let mut res = Vec::new();
+		walker.read_eof(&mut res).map(|_|res)
+	}
 	///
 	pub fn new_with_start(
 		repo: &'a Repository,
@@ -146,6 +178,8 @@ impl<'a> LogWalker<'a> {
 			visited: HashSet::with_capacity(1000),
 			repo,
 			filter: None,
+			stopper: None,
+			filtered_limit: 0
 		})
 	}
 
@@ -158,6 +192,18 @@ impl<'a> LogWalker<'a> {
 	#[must_use]
 	pub fn filter(self, filter: Option<LogWalkerFilter>) -> Self {
 		Self { filter, ..self }
+	}
+
+	///
+	#[must_use]
+	pub fn filter_with_limit(self, filter: Option<LogWalkerFilter>, filtered_limit: usize) -> Self {
+		Self { filter, filtered_limit, ..self }
+	}
+
+	///
+	#[must_use]
+	pub fn stopper(self, stopper: Option<LogWalkerFilter>) -> Self {
+		Self { stopper, ..self }
 	}
 
 	///
@@ -177,6 +223,7 @@ impl<'a> LogWalker<'a> {
 	///
 	pub fn read(&mut self, out: &mut Vec<CommitId>) -> Result<usize> {
 		let mut count = 0_usize;
+		let mut filtered_count = 0_usize;
 
 		while let Some(c) = self.commits.pop() {
 			for p in c.0.parents() {
@@ -193,11 +240,21 @@ impl<'a> LogWalker<'a> {
 
 			if commit_should_be_included {
 				out.push(id);
+				filtered_count += 1;
+				if filtered_count == self.filtered_limit {
+					break;
+				}
 			}
 
 			count += 1;
 			if count == self.limit {
 				break;
+			}
+
+			if let Some(ref stopper) = self.stopper {
+				if stopper(self.repo, &id, &c.0)? {
+					break;
+				}
 			}
 		}
 

@@ -13,7 +13,7 @@ use crate::{
 };
 use anyhow::Result;
 use asyncgit::{
-	sync::{BlameHunk, CommitId, FileBlame, RepoPathRef},
+	sync::{filter_by_path, BlameHunk, CommitId, FileBlame, RepoPathRef, RepoPath, LogWalker},
 	AsyncBlame, AsyncGitNotification, BlameParams,
 };
 use crossbeam_channel::Sender;
@@ -53,6 +53,7 @@ pub struct BlameFileComponent {
 	key_config: SharedKeyConfig,
 	current_height: std::cell::Cell<usize>,
 	previous_request_stack: Vec<(BlameFileOpen, TableState)>,
+	repo: RepoPath,
 }
 impl DrawableComponent for BlameFileComponent {
 	fn draw<B: Backend>(
@@ -227,11 +228,19 @@ impl Component for BlameFileComponent {
 				{
 					let commit = self.selected_commit();
 					if commit.is_some() && self.open_request.is_some() {
-						self.push_request(BlameFileOpen{
-							file_path:self.open_request.as_ref().unwrap().file_path.clone(), 
-							commit_id: commit, 
-							selection: Some(0)}
-						);
+						let f_path = self.open_request.as_ref().unwrap().file_path.clone();
+						let commits_only_for_file = Some(filter_by_path(f_path.clone(), true));
+						if let Ok(commits) = LogWalker::new_with_start_by_path(&self.repo, commit.as_ref(), |w|{
+							w.filter_with_limit(commits_only_for_file, 2)
+						}) {
+							if commits.len() == 2 {
+								self.push_request(BlameFileOpen{
+									file_path:f_path, 
+									commit_id: Some(commits[1]), 
+									selection: self.get_selection()}
+									);
+							}
+						}
 					}
 				} else if key_match(key, self.key_config.keys.generic_pop)
 				{
@@ -310,6 +319,7 @@ impl BlameFileComponent {
 			key_config,
 			current_height: std::cell::Cell::new(0),
 			previous_request_stack: Vec::new(),
+			repo: repo.borrow().clone()
 		}
 	}
 
