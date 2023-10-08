@@ -1552,6 +1552,18 @@ pub mod commands {
 		)
 	}
 
+	pub fn jump_to_line(key_config: &SharedKeyConfig, num: &str) -> CommandText {
+		CommandText::new(
+			format!(
+				"Jump to {} [{}]",
+				num,
+				key_config.get_hint(key_config.keys.end),
+			),
+			"Jump to line number",
+			CMD_GROUP_GENERAL,
+		)
+	}
+
 	pub fn blame_stack_pop(key_config: &SharedKeyConfig) -> CommandText {
 		CommandText::new(
 			format!(

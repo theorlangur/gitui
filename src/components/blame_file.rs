@@ -18,6 +18,7 @@ use asyncgit::{
 };
 use crossbeam_channel::Sender;
 use crossterm::event::Event;
+use crossterm::event::KeyCode;
 use ratatui::{
 	backend::Backend,
 	layout::{Constraint, Rect},
@@ -54,6 +55,7 @@ pub struct BlameFileComponent {
 	current_height: std::cell::Cell<usize>,
 	previous_request_stack: Vec<(BlameFileOpen, TableState)>,
 	repo: RepoPath,
+	temp_buf: Option<String>,
 }
 impl DrawableComponent for BlameFileComponent {
 	fn draw<B: Backend>(
@@ -199,6 +201,17 @@ impl Component for BlameFileComponent {
 				)
 				.order(1),
 			);
+			out.push(
+				CommandInfo::new(
+					strings::commands::jump_to_line(
+						&self.key_config,
+						self.temp_buf.as_ref().map(|s|s.as_str()).unwrap_or_else(||"")
+					),
+					true,
+					self.temp_buf.is_some(),
+				)
+				.order(1),
+			);
 		}
 
 		visibility_blocking(self)
@@ -210,6 +223,7 @@ impl Component for BlameFileComponent {
 	) -> Result<EventState> {
 		if self.is_visible() {
 			if let Event::Key(key) = event {
+				let temp_buf = self.temp_buf.take();
 				if key_match(key, self.key_config.keys.exit_popup) {
 					self.hide_stacked(false);
 				} else if key_match(key, self.key_config.keys.move_up)
@@ -235,7 +249,20 @@ impl Component for BlameFileComponent {
 					key,
 					self.key_config.keys.end,
 				) {
-					self.move_selection(ScrollType::End);
+					let mut default_jump_to_end = true;
+					if let Some(s) = temp_buf {
+						if let Ok(line) = s.parse::<usize>() {
+							//attempt to parse line number
+							let mut table_state = self.table_state.take();
+							table_state.select(Some(line));
+							self.table_state.set(table_state);
+							default_jump_to_end = false;
+						}
+					}
+
+					if default_jump_to_end {
+						self.move_selection(ScrollType::End);
+					}
 				} else if key_match(
 					key,
 					self.key_config.keys.page_down,
@@ -293,6 +320,14 @@ impl Component for BlameFileComponent {
 							),
 						));
 					}
+				} else if let KeyCode::Char(c) = key.code {
+					if c == 'G' {
+					}else if c >= '0' && c <='9' {
+						self.temp_buf = match temp_buf {
+							None => Some(format!("{}", c)),
+							Some(mut s) => {s.push(c); Some(s)}
+						};
+					}
 				}
 
 				return Ok(EventState::Consumed);
@@ -339,7 +374,8 @@ impl BlameFileComponent {
 			key_config,
 			current_height: std::cell::Cell::new(0),
 			previous_request_stack: Vec::new(),
-			repo: repo.borrow().clone()
+			repo: repo.borrow().clone(),
+			temp_buf: None,
 		}
 	}
 
