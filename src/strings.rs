@@ -1564,6 +1564,41 @@ pub mod commands {
 		)
 	}
 
+	pub fn cancel_search_init(key_config: &SharedKeyConfig) -> CommandText {
+		CommandText::new(
+			format!(
+				"Cancel search [{}]",
+				key_config.get_hint(key_config.keys.exit_popup),
+			),
+			"Cancel current search initiation",
+			CMD_GROUP_GENERAL,
+		)
+	}
+
+	pub fn search_for_text(key_config: &SharedKeyConfig, num: &str) -> CommandText {
+		CommandText::new(
+			format!(
+				"Searching for '{}' [{}]",
+				num,
+				key_config.get_hint(key_config.keys.enter),
+			),
+			"Initiate text searching",
+			CMD_GROUP_GENERAL,
+		)
+	}
+
+	pub fn search_for_text_next(key_config: &SharedKeyConfig, num: &str) -> CommandText {
+		CommandText::new(
+			format!(
+				"Search next: '{}' [{}]",
+				num,
+				key_config.get_hint(key_config.keys.search_next),
+			),
+			"Search for the next text occurence",
+			CMD_GROUP_GENERAL,
+		)
+	}
+
 	pub fn blame_stack_pop(key_config: &SharedKeyConfig) -> CommandText {
 		CommandText::new(
 			format!(

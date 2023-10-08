@@ -41,6 +41,32 @@ pub struct BlameFileOpen {
 	pub selection: Option<usize>,
 }
 
+#[derive(PartialEq)]
+enum BlameState {
+	Normal,
+	SearchEditing 
+}
+
+struct LinePos {
+	pub line: usize,
+	pub offset: usize
+}
+
+struct SearchState
+{
+	pub str: Option<String>,
+	pub line_pos: LinePos,
+}
+
+impl SearchState {
+	pub fn new()->Self{
+		Self{
+			str: None,
+			line_pos: LinePos{line: 0, offset: 0},
+		}
+	}
+}
+
 pub struct BlameFileComponent {
 	title: String,
 	theme: SharedTheme,
@@ -56,6 +82,8 @@ pub struct BlameFileComponent {
 	previous_request_stack: Vec<(BlameFileOpen, TableState)>,
 	repo: RepoPath,
 	temp_buf: Option<String>,
+	search: SearchState,
+	state: BlameState 
 }
 impl DrawableComponent for BlameFileComponent {
 	fn draw<B: Backend>(
@@ -145,11 +173,13 @@ impl Component for BlameFileComponent {
 		force_all: bool,
 	) -> CommandBlocking {
 		if self.is_visible() || force_all {
+			let is_normal = self.state == BlameState::Normal;
+			let is_searching = self.state == BlameState::SearchEditing;
 			out.push(
 				CommandInfo::new(
 					strings::commands::close_popup(&self.key_config),
 					true,
-					true,
+					is_normal,
 				)
 				.order(1),
 			);
@@ -157,7 +187,7 @@ impl Component for BlameFileComponent {
 				CommandInfo::new(
 					strings::commands::scroll(&self.key_config),
 					true,
-					self.file_blame.is_some(),
+					self.file_blame.is_some() && is_normal,
 				)
 				.order(1),
 			);
@@ -167,7 +197,7 @@ impl Component for BlameFileComponent {
 						&self.key_config,
 					),
 					true,
-					self.file_blame.is_some(),
+					self.file_blame.is_some() && is_normal,
 				)
 				.order(1),
 			);
@@ -177,7 +207,7 @@ impl Component for BlameFileComponent {
 						&self.key_config,
 					),
 					true,
-					self.file_blame.is_some(),
+					self.file_blame.is_some() && is_normal,
 				)
 				.order(1),
 			);
@@ -187,7 +217,7 @@ impl Component for BlameFileComponent {
 						&self.key_config,
 					),
 					true,
-					self.file_blame.is_some(),
+					self.file_blame.is_some() && is_normal,
 				)
 				.order(1),
 			);
@@ -197,7 +227,7 @@ impl Component for BlameFileComponent {
 						&self.key_config,
 					),
 					true,
-					!self.previous_request_stack.is_empty(),
+					!self.previous_request_stack.is_empty() && is_normal,
 				)
 				.order(1),
 			);
@@ -205,10 +235,48 @@ impl Component for BlameFileComponent {
 				CommandInfo::new(
 					strings::commands::jump_to_line(
 						&self.key_config,
-						self.temp_buf.as_ref().map(|s|s.as_str()).unwrap_or_else(||"")
+						self.temp_buf.as_ref().map(|s|s.as_str()).unwrap_or("")
 					),
 					true,
-					self.temp_buf.is_some(),
+					self.temp_buf.is_some() && is_normal,
+				)
+				.order(1),
+			);
+			out.push(
+				CommandInfo::new(
+					strings::commands::start_search(&self.key_config),
+					true,
+					is_normal,
+				)
+				.order(1),
+			);
+			out.push(
+				CommandInfo::new(
+					strings::commands::cancel_search_init(&self.key_config),
+					true,
+					is_searching,
+				)
+				.order(1),
+			);
+			out.push(
+				CommandInfo::new(
+					strings::commands::search_for_text(
+						&self.key_config,
+						self.search.str.as_ref().map(|s|s.as_str()).unwrap_or("")
+					),
+					true,
+					self.search.str.is_some() && is_searching,
+				)
+				.order(1),
+			);
+			out.push(
+				CommandInfo::new(
+					strings::commands::search_for_text_next(
+						&self.key_config,
+						self.search.str.as_ref().map(|s|s.as_str()).unwrap_or("")
+					),
+					true,
+					self.search.str.is_some() && is_normal,
 				)
 				.order(1),
 			);
@@ -224,6 +292,10 @@ impl Component for BlameFileComponent {
 		if self.is_visible() {
 			if let Event::Key(key) = event {
 				let temp_buf = self.temp_buf.take();
+				if self.state == BlameState::SearchEditing{
+					return self.event_search_edit_state(key);
+				}
+
 				if key_match(key, self.key_config.keys.exit_popup) {
 					self.hide_stacked(false);
 				} else if key_match(key, self.key_config.keys.move_up)
@@ -271,6 +343,12 @@ impl Component for BlameFileComponent {
 				} else if key_match(key, self.key_config.keys.page_up)
 				{
 					self.move_selection(ScrollType::PageUp);
+				} else if key_match(key, self.key_config.keys.start_search_forward_init)
+				{
+					self.enter_search_mode();
+				} else if key_match(key, self.key_config.keys.search_next)
+				{
+					self.search_next();
 				} else if key_match(key, self.key_config.keys.generic_push)
 				{
 					let commit = self.selected_commit();
@@ -376,6 +454,8 @@ impl BlameFileComponent {
 			previous_request_stack: Vec::new(),
 			repo: repo.borrow().clone(),
 			temp_buf: None,
+			search: SearchState::new(),
+			state: BlameState::Normal
 		}
 	}
 
@@ -658,6 +738,11 @@ impl BlameFileComponent {
 		table_state.select(Some(new_selection));
 		self.table_state.set(table_state);
 
+		if self.search.str.as_ref().is_some_and(|s|!s.is_empty()) {
+			self.search.line_pos.line = new_selection;
+			self.search.line_pos.offset = 0;
+		}
+
 		needs_update
 	}
 
@@ -669,6 +754,12 @@ impl BlameFileComponent {
 			table_state.select(Some(selection));
 			self.table_state.set(table_state);
 		}
+	}
+
+	fn move_selection_to(&mut self, pos: usize) {
+		let mut table_state = self.table_state.take();
+		table_state.select(Some(pos));
+		self.table_state.set(table_state);
 	}
 
 	fn get_selection(&self) -> Option<usize> {
@@ -699,6 +790,99 @@ impl BlameFileComponent {
 
 			commit_id
 		})
+	}
+
+	fn enter_search_mode(&mut self)
+	{
+		self.state = BlameState::SearchEditing;
+		self.search.str = Some(String::new());
+		self.search.line_pos.line = self.get_selection().unwrap_or(0);
+		self.search.line_pos.offset = 0;
+	}
+
+	fn search_only(&mut self) -> Option<LinePos>
+	{
+		if let Some(b) = self.file_blame.as_ref() {
+			let substr = self.search.str.as_ref().map(|s|s.as_str()).unwrap_or("");
+			let from = &self.search.line_pos;
+			let r = b.lines[from.line].1.as_str()[from.offset..].find(substr);
+			if let Some(offset) = r {
+				return Some(LinePos{line: self.search.line_pos.line, offset: offset + from.offset});
+			}
+
+			for i in (from.line + 1)..b.lines.len() {
+				if let Some(offset) = b.lines[i].1.as_str().find(substr) {
+					return Some(LinePos{line: i, offset});
+				}
+			}
+
+			//wrap-around
+			for i in 0..from.line + 1 {
+				if let Some(offset) = b.lines[i].1.as_str().find(substr) {
+					return Some(LinePos{line: i, offset});
+				}
+			}
+		}
+		None
+	}
+
+	fn search_next(&mut self)
+	{
+		if self.search.str.as_ref().is_some_and(|s|!s.is_empty()) {
+			if let Some(r) = self.search_only() {
+				self.search.line_pos.line = r.line;
+				self.search.line_pos.offset = r.offset + 1;
+				self.move_selection_to(self.search.line_pos.line);
+			}
+		}
+	}
+
+	/*fn search_prev(&mut self)
+	{
+	}*/
+
+	fn event_search_edit_state(
+		&mut self,
+		key: &crossterm::event::KeyEvent,
+	) -> Result<EventState> {
+		if key_match(key, self.key_config.keys.exit_popup) {
+			//back to initial line
+			self.move_selection_to(self.search.line_pos.line);
+			self.search.str = None;
+			self.state = BlameState::Normal;
+		}else if key_match(key, self.key_config.keys.enter) {
+			self.state = BlameState::Normal;
+			if self.search.str.as_ref().is_some_and(|s|s.is_empty()) {
+				self.search.str = None;
+			}
+		}else if let KeyCode::Char(c) = key.code {
+			self.search.str = if let Some(mut s) = self.search.str.take() {
+				s.push(c);
+				Some(s)
+			}else{
+				Some(format!("{}", c))
+			};
+			//inc search here
+			if let Some(r) = self.search_only() {
+				self.move_selection_to(r.line);
+			}else{
+				self.move_selection_to(self.search.line_pos.line);
+			}
+		}else if let KeyCode::Backspace = key.code {
+			self.search.str = if let Some(mut s) = self.search.str.take() {
+				s.pop();
+				Some(s)
+			}else{
+				Some(String::new())
+			};
+			//inc search here
+			if let Some(r) = self.search_only() {
+				self.move_selection_to(r.line);
+			}else{
+				self.move_selection_to(self.search.line_pos.line);
+			}
+		}
+		return Ok(EventState::Consumed);
 	}
 }
 
