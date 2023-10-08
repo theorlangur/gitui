@@ -1540,6 +1540,28 @@ pub mod commands {
 			CMD_GROUP_GENERAL,
 		)
 	}
+
+	pub fn blame_stack_push(key_config: &SharedKeyConfig) -> CommandText {
+		CommandText::new(
+			format!(
+				"Blame line [{}]",
+				key_config.get_hint(key_config.keys.generic_push),
+			),
+			"Blame version of file without the selected commit",
+			CMD_GROUP_GENERAL,
+		)
+	}
+
+	pub fn blame_stack_pop(key_config: &SharedKeyConfig) -> CommandText {
+		CommandText::new(
+			format!(
+				"Goto prev blame [{}]",
+				key_config.get_hint(key_config.keys.generic_pop),
+			),
+			"Go back to previous blame",
+			CMD_GROUP_GENERAL,
+		)
+	}
 	pub fn open_file_history(
 		key_config: &SharedKeyConfig,
 	) -> CommandText {

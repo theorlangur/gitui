@@ -182,7 +182,7 @@ impl Default for KeysList {
 			shift_up: GituiKeyEvent::new(KeyCode::Up,  KeyModifiers::SHIFT),
 			shift_down: GituiKeyEvent::new(KeyCode::Down,  KeyModifiers::SHIFT),
 			enter: GituiKeyEvent::new(KeyCode::Enter,  KeyModifiers::empty()),
-			blame: GituiKeyEvent::new(KeyCode::Char('B'),  KeyModifiers::SHIFT),
+			blame: GituiKeyEvent::new(KeyCode::Char('b'),  KeyModifiers::empty()),
 			file_history: GituiKeyEvent::new(KeyCode::Char('I'),  KeyModifiers::SHIFT),
 			edit_file: GituiKeyEvent::new(KeyCode::Char('e'),  KeyModifiers::empty()),
 			status_stage_all: GituiKeyEvent::new(KeyCode::Char('a'),  KeyModifiers::empty()),

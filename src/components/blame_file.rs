@@ -179,6 +179,26 @@ impl Component for BlameFileComponent {
 				)
 				.order(1),
 			);
+			out.push(
+				CommandInfo::new(
+					strings::commands::blame_stack_push(
+						&self.key_config,
+					),
+					true,
+					self.file_blame.is_some(),
+				)
+				.order(1),
+			);
+			out.push(
+				CommandInfo::new(
+					strings::commands::blame_stack_pop(
+						&self.key_config,
+					),
+					true,
+					!self.previous_request_stack.is_empty(),
+				)
+				.order(1),
+			);
 		}
 
 		visibility_blocking(self)
