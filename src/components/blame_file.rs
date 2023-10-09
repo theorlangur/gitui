@@ -291,6 +291,17 @@ impl Component for BlameFileComponent {
 				)
 				.order(1),
 			);
+			out.push(
+				CommandInfo::new(
+					strings::commands::search_for_text_prev(
+						&self.key_config,
+						self.search.str.as_ref().map(|s|s.as_str()).unwrap_or("")
+					),
+					true,
+					self.search.str.is_some() && is_normal,
+				)
+				.order(1),
+			);
 		}
 
 		visibility_blocking(self)
@@ -340,6 +351,9 @@ impl Component for BlameFileComponent {
 							table_state.select(Some(line));
 							self.table_state.set(table_state);
 							default_jump_to_end = false;
+							if self.search.is_valid() {
+								self.search.start = LinePos{line, offset: 0};
+							}
 						}
 					}
 
@@ -360,6 +374,9 @@ impl Component for BlameFileComponent {
 				} else if key_match(key, self.key_config.keys.search_next)
 				{
 					self.search_next();
+				} else if key_match(key, self.key_config.keys.search_prev)
+				{
+					self.search_prev();
 				} else if key_match(key, self.key_config.keys.generic_push)
 				{
 					let commit = self.selected_commit();
@@ -857,6 +874,33 @@ impl BlameFileComponent {
 		None
 	}
 
+	fn search_only_back(&mut self) -> Option<LinePos>
+	{
+		if let Some(b) = self.file_blame.as_ref() {
+			let substr = self.search.str.as_ref().map(|s|s.as_str()).unwrap_or("");
+			let from = self.search.start.clone();
+
+			let r = b.lines[from.line].1.as_str()[..from.offset].rfind(substr);
+			if let Some(offset) = r {
+				return Some(LinePos{line: from.line, offset});
+			}
+
+			//wrap-around
+			for i in (0..from.line).rev() {
+				if let Some(offset) = b.lines[i].1.as_str().rfind(substr) {
+					return Some(LinePos{line: i, offset});
+				}
+			}
+
+			for i in (from.line + 1..b.lines.len()).rev() {
+				if let Some(offset) = b.lines[i].1.as_str().rfind(substr) {
+					return Some(LinePos{line: i, offset});
+				}
+			}
+		}
+		None
+	}
+
 	fn search_next(&mut self)
 	{
 		if self.search.str.as_ref().is_some_and(|s|!s.is_empty()) {
@@ -869,9 +913,17 @@ impl BlameFileComponent {
 		}
 	}
 
-	/*fn search_prev(&mut self)
+	fn search_prev(&mut self)
 	{
-	}*/
+		if self.search.str.as_ref().is_some_and(|s|!s.is_empty()) {
+			if let Some(r) = self.search_only_back() {
+				let l = r.line;
+				self.search.start = r.clone();
+				self.search.found = Some(r);
+				self.move_selection_to(l);
+			}
+		}
+	}
 
 	fn event_search_edit_state(
 		&mut self,

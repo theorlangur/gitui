@@ -1599,6 +1599,18 @@ pub mod commands {
 		)
 	}
 
+	pub fn search_for_text_prev(key_config: &SharedKeyConfig, num: &str) -> CommandText {
+		CommandText::new(
+			format!(
+				"Search prev: '{}' [{}]",
+				num,
+				key_config.get_hint(key_config.keys.search_prev),
+			),
+			"Search for the previous text occurence",
+			CMD_GROUP_GENERAL,
+		)
+	}
+
 	pub fn blame_stack_pop(key_config: &SharedKeyConfig) -> CommandText {
 		CommandText::new(
 			format!(
