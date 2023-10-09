@@ -23,7 +23,7 @@ use ratatui::{
 	backend::Backend,
 	layout::{Constraint, Rect},
 	symbols::line::VERTICAL,
-	text::Span,
+	text::{Span, Spans},
 	widgets::{Block, Borders, Cell, Clear, Row, Table, TableState},
 	Frame,
 };
@@ -47,6 +47,7 @@ enum BlameState {
 	SearchEditing 
 }
 
+#[derive(Clone, PartialEq)]
 struct LinePos {
 	pub line: usize,
 	pub offset: usize
@@ -55,15 +56,25 @@ struct LinePos {
 struct SearchState
 {
 	pub str: Option<String>,
-	pub line_pos: LinePos,
+	pub start: LinePos,
+	pub found: Option<LinePos>,
 }
 
 impl SearchState {
 	pub fn new()->Self{
 		Self{
 			str: None,
-			line_pos: LinePos{line: 0, offset: 0},
+			start: LinePos{line:0, offset:0},
+			found: None,
 		}
+	}
+
+	pub fn is_valid(&self)->bool {
+		self.str.as_ref().is_some_and(|s|!s.is_empty())
+	}
+
+	pub fn has_result(&self)->bool {
+		self.found.is_some() && self.str.as_ref().is_some_and(|s|!s.is_empty())
 	}
 }
 
@@ -616,11 +627,11 @@ impl BlameFileComponent {
 			})
 	}
 
-	fn get_line_blame(
-		&self,
+	fn get_line_blame<'a>(
+		&'a self,
 		width: usize,
 		line_number: usize,
-		hunk_and_line: (Option<&BlameHunk>, &str),
+		hunk_and_line: (Option<&BlameHunk>, &'a str),
 		file_blame: &FileBlame,
 	) -> Row {
 		let (hunk_for_line, line) = hunk_and_line;
@@ -652,10 +663,26 @@ impl BlameFileComponent {
 			))
 			.style(self.theme.text(true, false)),
 		);
-		cells.push(
-			Cell::from(tabs_to_spaces(String::from(line)))
+		if self.search.has_result() && self.search.found.as_ref().is_some_and(|i|i.line == line_number) {
+			let f = self.search.found.as_ref().unwrap();
+			let end_offset = f.offset + self.search.str.as_ref().unwrap().len();
+			let before_search = &line[..f.offset];
+			let search_text = &line[f.offset..end_offset];
+			let after_search = &line[end_offset..];
+			cells.push(
+				Cell::from(Spans::from(vec![
+									   Span::raw(before_search),
+									   Span::styled(search_text, self.theme.search_result()),
+									   Span::raw(after_search),
+				]))
 				.style(self.theme.text(true, false)),
-		);
+				);
+		}else{
+			cells.push(
+				Cell::from(tabs_to_spaces(String::from(line)))
+				.style(self.theme.text(true, false)),
+				);
+		}
 
 		Row::new(cells)
 	}
@@ -738,9 +765,8 @@ impl BlameFileComponent {
 		table_state.select(Some(new_selection));
 		self.table_state.set(table_state);
 
-		if self.search.str.as_ref().is_some_and(|s|!s.is_empty()) {
-			self.search.line_pos.line = new_selection;
-			self.search.line_pos.offset = 0;
+		if self.search.is_valid() {
+			self.search.start = LinePos{line: new_selection, offset: 0};
 		}
 
 		needs_update
@@ -796,18 +822,23 @@ impl BlameFileComponent {
 	{
 		self.state = BlameState::SearchEditing;
 		self.search.str = Some(String::new());
-		self.search.line_pos.line = self.get_selection().unwrap_or(0);
-		self.search.line_pos.offset = 0;
+		self.search.start = LinePos{line: self.get_selection().unwrap_or(0), offset: 0};
 	}
 
 	fn search_only(&mut self) -> Option<LinePos>
 	{
 		if let Some(b) = self.file_blame.as_ref() {
 			let substr = self.search.str.as_ref().map(|s|s.as_str()).unwrap_or("");
-			let from = &self.search.line_pos;
+			let mut from = self.search.start.clone();
+			if let Some(f) = self.search.found.as_ref() {
+				if from == *f {
+					from.offset = from.offset + 1
+				}
+			}
+
 			let r = b.lines[from.line].1.as_str()[from.offset..].find(substr);
 			if let Some(offset) = r {
-				return Some(LinePos{line: self.search.line_pos.line, offset: offset + from.offset});
+				return Some(LinePos{line: from.line, offset: offset + from.offset});
 			}
 
 			for i in (from.line + 1)..b.lines.len() {
@@ -830,9 +861,10 @@ impl BlameFileComponent {
 	{
 		if self.search.str.as_ref().is_some_and(|s|!s.is_empty()) {
 			if let Some(r) = self.search_only() {
-				self.search.line_pos.line = r.line;
-				self.search.line_pos.offset = r.offset + 1;
-				self.move_selection_to(self.search.line_pos.line);
+				let l = r.line;
+				self.search.start = r.clone();
+				self.search.found = Some(r);
+				self.move_selection_to(l);
 			}
 		}
 	}
@@ -847,13 +879,15 @@ impl BlameFileComponent {
 	) -> Result<EventState> {
 		if key_match(key, self.key_config.keys.exit_popup) {
 			//back to initial line
-			self.move_selection_to(self.search.line_pos.line);
+			self.move_selection_to(self.search.start.line);
 			self.search.str = None;
 			self.state = BlameState::Normal;
 		}else if key_match(key, self.key_config.keys.enter) {
 			self.state = BlameState::Normal;
 			if self.search.str.as_ref().is_some_and(|s|s.is_empty()) {
 				self.search.str = None;
+			}else if let Some(f) = self.search.found.as_ref() {
+				self.search.start = f.clone();
 			}
 		}else if let KeyCode::Char(c) = key.code {
 			self.search.str = if let Some(mut s) = self.search.str.take() {
@@ -864,9 +898,11 @@ impl BlameFileComponent {
 			};
 			//inc search here
 			if let Some(r) = self.search_only() {
-				self.move_selection_to(r.line);
+				let l = r.line;
+				self.search.found = Some(r);
+				self.move_selection_to(l);
 			}else{
-				self.move_selection_to(self.search.line_pos.line);
+				self.move_selection_to(self.search.start.line);
 			}
 		}else if let KeyCode::Backspace = key.code {
 			self.search.str = if let Some(mut s) = self.search.str.take() {
@@ -877,9 +913,11 @@ impl BlameFileComponent {
 			};
 			//inc search here
 			if let Some(r) = self.search_only() {
-				self.move_selection_to(r.line);
+				let l = r.line;
+				self.search.found = Some(r);
+				self.move_selection_to(l);
 			}else{
-				self.move_selection_to(self.search.line_pos.line);
+				self.move_selection_to(self.search.start.line);
 			}
 		}
 		return Ok(EventState::Consumed);

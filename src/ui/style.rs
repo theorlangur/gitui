@@ -97,6 +97,18 @@ impl Theme {
 			})
 	}
 
+	pub fn search_result(&self) -> Style {
+		Style::default()
+			.fg(self.branch_fg)
+			.add_modifier(Modifier::BOLD)
+			.add_modifier(Modifier::UNDERLINED)
+			/*.bg(if selected {
+				self.selection_bg
+			} else {
+				Color::Reset
+			})*/
+	}
+
 	pub fn text(&self, enabled: bool, selected: bool) -> Style {
 		match (enabled, selected) {
 			(false, false) => Style::default().fg(self.disabled_fg),
