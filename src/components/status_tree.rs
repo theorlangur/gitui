@@ -3,7 +3,7 @@ use super::{
 		filetree::{FileTreeItem, FileTreeItemKind},
 		statustree::{MoveSelection, StatusTree},
 	},
-	BlameFileOpen, CommandBlocking, DrawableComponent, FileRevOpen,
+	/*BlameFileOpen,*/ CommandBlocking, DrawableComponent, FileRevOpen,
 };
 use crate::{
 	components::{CommandInfo, Component, EventState},
@@ -430,14 +430,14 @@ impl Component for StatusTreeComponent {
 			.order(order::NAV),
 		);
 
-		out.push(
+		/*out.push(
 			CommandInfo::new(
 				strings::commands::blame_file(&self.key_config),
 				self.selection_file().is_some(),
 				self.focused || force_all,
 			)
 			.order(order::RARE_ACTION),
-		);
+		);*/
 
 		out.push(
 			CommandInfo::new(
@@ -474,7 +474,7 @@ impl Component for StatusTreeComponent {
 	fn event(&mut self, ev: &Event) -> Result<EventState> {
 		if self.focused {
 			if let Event::Key(e) = ev {
-				return if key_match(e, self.key_config.keys.blame) {
+				return /*if key_match(e, self.key_config.keys.blame) {
 					if let Some(status_item) = self.selection_file() {
 						self.hide();
 						if let Some(queue) = &self.queue {
@@ -490,7 +490,7 @@ impl Component for StatusTreeComponent {
 						}
 					}
 					Ok(EventState::Consumed)
-				} else if key_match(
+				} else*/ if key_match(
 					e,
 					self.key_config.keys.file_history,
 				) {
