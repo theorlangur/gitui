@@ -379,13 +379,16 @@ impl DiffComponent {
 				self.copy_op = CopyState::None;
 			},
 			CopyState::LinesUp(s) => {
-				self.selection.modify(Direction::Up, s.try_into().unwrap());
+				let start = self.selection.get_start();
+				self.selection = Selection::Multiple(start, start.saturating_sub(s.try_into().unwrap()));
 				self.copy_selection();
 				self.update_selection(self.selection.get_top());
 				self.copy_op = CopyState::None;
 			},
 			CopyState::LinesDown(s) => {
-				self.selection.modify(Direction::Down, s.try_into().unwrap());
+				let start = self.selection.get_start();
+				let n_lines = self.lines_count();
+				self.selection = Selection::Multiple(start, cmp::min(start.saturating_add(s.try_into().unwrap()), n_lines));
 				self.copy_selection();
 				self.update_selection(self.selection.get_end());
 				self.copy_op = CopyState::None;
