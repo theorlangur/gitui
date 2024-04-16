@@ -20,6 +20,8 @@ use asyncgit::{
 };
 use bytesize::ByteSize;
 use crossterm::event::Event;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyCode;
 use ratatui::{
 	backend::Backend,
 	layout::Rect,
@@ -100,6 +102,17 @@ impl Selection {
 	}
 }
 
+enum CopyState
+{
+	None,
+	Pending,
+	Size(isize),
+	LinesUp(isize),
+	LinesDown(isize),
+	Line,
+	Hunk
+}
+
 ///
 pub struct DiffComponent {
 	repo: RepoPathRef,
@@ -117,6 +130,7 @@ pub struct DiffComponent {
 	theme: SharedTheme,
 	key_config: SharedKeyConfig,
 	is_immutable: bool,
+	copy_op: CopyState,
 }
 
 impl DiffComponent {
@@ -144,6 +158,7 @@ impl DiffComponent {
 			key_config,
 			is_immutable,
 			repo,
+			copy_op: CopyState::None
 		}
 	}
 	///
@@ -307,6 +322,80 @@ impl DiffComponent {
 		}
 	}
 
+	fn copy_event(&mut self, e: &KeyEvent) -> Result<EventState> {
+		if key_match(e, self.key_config.keys.copy) {
+			self.copy_op  = match self.copy_op {
+				CopyState::Pending => CopyState::Line,
+				_ => CopyState::None
+			};
+		}else if key_match(e, self.key_config.keys.copy_hunk) {
+			self.copy_op  = match self.copy_op {
+				CopyState::Pending => CopyState::Hunk,
+				_ => CopyState::None
+			};
+		}else if key_match(e, self.key_config.keys.move_up) { 
+			self.copy_op  = match self.copy_op {
+				CopyState::Size(s) => CopyState::LinesUp(s),
+				_ => CopyState::None
+			};
+		}else if key_match(e, self.key_config.keys.move_down) { 
+			self.copy_op  = match self.copy_op {
+				CopyState::Size(s) => CopyState::LinesDown(s),
+				_ => CopyState::None
+			};
+		}else if let KeyCode::Char(c) = e.code {
+			self.copy_op = if let Some(d) = c.to_digit(10) {
+				let d : isize = d.try_into().unwrap();
+				match self.copy_op {
+					CopyState::Pending => CopyState::Size(d),
+					CopyState::Size(s) => CopyState::Size(s * 10 + d),
+					_ => CopyState::None
+				}
+			}else {
+				CopyState::None
+			};
+		}else
+		{
+			self.copy_op = CopyState::None;
+		}
+
+		//try execute
+		match self.copy_op {
+			CopyState::Line => {
+				self.copy_selection();
+				self.copy_op = CopyState::None;
+			},
+			CopyState::Hunk => {
+				if let Some(hr) = self.get_selected_hunk_line_range() {
+					//place selection at the start of the hunk
+					self.update_selection(hr.0);
+					//expand to the whole size of the hunk
+					self.selection = Selection::Multiple(hr.0, hr.1);
+					//copy
+					self.copy_selection();
+					//place selection at the end of the hunk
+					self.update_selection(hr.1 - 1);
+				}
+				self.copy_op = CopyState::None;
+			},
+			CopyState::LinesUp(s) => {
+				self.selection.modify(Direction::Up, s.try_into().unwrap());
+				self.copy_selection();
+				self.update_selection(self.selection.get_top());
+				self.copy_op = CopyState::None;
+			},
+			CopyState::LinesDown(s) => {
+				self.selection.modify(Direction::Down, s.try_into().unwrap());
+				self.copy_selection();
+				self.update_selection(self.selection.get_end());
+				self.copy_op = CopyState::None;
+			},
+			_ => ()
+		};
+
+		Ok(EventState::Consumed)
+	}
+
 	fn find_selected_hunk(
 		diff: &FileDiff,
 		line_selected: usize,
@@ -327,6 +416,34 @@ impl DiffComponent {
 			line_cursor += hunk_len;
 		}
 
+		None
+	}
+
+	fn get_hunk_line_range(
+		diff: &FileDiff,
+		hunk_index: usize,
+	) -> Option<(usize,usize)> {
+		let mut line_cursor = 0_usize;
+		for (i, hunk) in diff.hunks.iter().enumerate() {
+			let hunk_len = hunk.lines.len();
+			let hunk_min = line_cursor;
+			let hunk_max = line_cursor + hunk_len;
+
+			if hunk_index == i {
+				return Some((hunk_min, hunk_max))
+			}
+			line_cursor += hunk_len;
+		}
+
+		None
+	}
+
+	fn get_selected_hunk_line_range(&self) -> Option<(usize,usize)> {
+		if let Some(h) = self.selected_hunk.as_ref() {
+			return Self::get_hunk_line_range(
+				self.diff.as_ref().unwrap(),
+				*h);
+		}
 		None
 	}
 
@@ -773,6 +890,11 @@ impl Component for DiffComponent {
 	fn event(&mut self, ev: &Event) -> Result<EventState> {
 		if self.focused() {
 			if let Event::Key(e) = ev {
+				match self.copy_op {
+					CopyState::None => (),
+					_ => return self.copy_event(e)
+				}
+
 				return if key_match(e, self.key_config.keys.move_down)
 				{
 					self.move_selection(ScrollType::Down);
@@ -862,8 +984,18 @@ impl Component for DiffComponent {
 					}
 					Ok(EventState::Consumed)
 				} else if key_match(e, self.key_config.keys.copy) {
-					self.copy_selection();
-					Ok(EventState::Consumed)
+					if let Selection::Multiple(_, _) = &self.selection {
+						self.copy_selection();
+						Ok(EventState::Consumed)
+					}else{
+						match self.copy_op {
+							CopyState::None => {
+								self.copy_op = CopyState::Pending;
+								Ok(EventState::Consumed)
+							},
+							_ => self.copy_event(e)
+						}
+					}
 				} else {
 					Ok(EventState::NotConsumed)
 				};
