@@ -549,9 +549,14 @@ impl DiffComponent {
 							{
 								let &selection = if let Some(copied) = self.copied_region.as_ref() { &copied.0 } else { &self.selection };
 								let copied = self.copied_region.is_some();
+								let line_number = if let Selection::Single(pos) = &self.selection { 
+									((line_cursor as isize) - (*pos as isize)).abs() as usize
+								} else { 
+									line_cursor + 1
+								};
 
 								res.push(Self::get_line_to_add(
-									width,
+									width - num_width,
 									line,
 									self.focused()
 										&& selection
@@ -563,7 +568,7 @@ impl DiffComponent {
 									self.horizontal_scroll
 										.get_right(),
 										num_width,
-										line_cursor + 1
+										line_number
 								));
 								lines_added += 1;
 							}
