@@ -133,6 +133,7 @@ pub struct DiffComponent {
 	is_immutable: bool,
 	copy_op: CopyState,
 	copied_region: Option<(Selection, SystemTime)>,
+	pending_movement: Option<usize>
 }
 
 impl DiffComponent {
@@ -161,7 +162,8 @@ impl DiffComponent {
 			is_immutable,
 			repo,
 			copy_op: CopyState::None,
-			copied_region: None
+			copied_region: None,
+			pending_movement: None
 		}
 	}
 	///
@@ -256,6 +258,34 @@ impl DiffComponent {
 		}
 	}
 
+	fn move_hunk_selection(&mut self, move_type: ScrollType) {
+		if let Some(diff) = &self.diff {
+			let new_start = match move_type {
+				ScrollType::Down => {
+					if let Some((_,to)) = self.get_selected_hunk_line_range() {
+						to
+					}else{
+						0
+					}
+				}
+				ScrollType::Up => {
+					if let Some(hunk_index) = self.selected_hunk {
+						if let Some((from,_to)) = Self::get_hunk_line_range(diff, hunk_index.saturating_sub(1)) {
+							from
+						}else {
+							0
+						}
+					}else{
+						0
+					}
+				}
+				_ => self.selection.get_start()
+			};
+
+			self.update_selection(new_start);
+		}
+	}
+
 	fn move_selection(&mut self, move_type: ScrollType) {
 		if let Some(diff) = &self.diff {
 			let max = diff.lines.saturating_sub(1);
@@ -338,6 +368,40 @@ impl DiffComponent {
 				)
 			);
 		}
+	}
+
+	fn movement_event(&mut self, e: &KeyEvent) -> Result<EventState> {
+		if key_match(e, self.key_config.keys.move_up) { 
+			if let Some(s) = self.pending_movement {
+				self.update_selection(self.selection.get_start().saturating_sub(s));
+				self.pending_movement = None;
+				return Ok(EventState::Consumed);
+			}
+		}else if key_match(e, self.key_config.keys.move_down) { 
+			if let Some(s) = self.pending_movement {
+				self.update_selection(self.selection.get_start().saturating_add(s).min(self.lines_count() - 1));
+				self.pending_movement = None;
+				return Ok(EventState::Consumed);
+			}
+		}else if let KeyCode::Char(c) = e.code {
+			self.pending_movement = if let Some(d) = c.to_digit(10) {
+				let d : usize = d.try_into().unwrap();
+				match self.pending_movement {
+					None => Some(d),
+					Some(s) => Some(s * 10 + d)
+				}
+			}else {
+				None
+			};
+
+			if self.pending_movement.is_some() {
+				return Ok(EventState::Consumed);
+			}
+		}else
+		{
+			self.pending_movement = None;
+		}
+		Ok(EventState::NotConsumed)
 	}
 
 	fn copy_event(&mut self, e: &KeyEvent) -> Result<EventState> {
@@ -942,6 +1006,10 @@ impl Component for DiffComponent {
 					_ => return self.copy_event(e)
 				}
 
+				if self.pending_movement.is_some() {
+					return self.movement_event(e);
+				}
+
 				return if key_match(e, self.key_config.keys.move_down)
 				{
 					self.move_selection(ScrollType::Down);
@@ -964,6 +1032,12 @@ impl Component for DiffComponent {
 					Ok(EventState::Consumed)
 				} else if key_match(e, self.key_config.keys.move_up) {
 					self.move_selection(ScrollType::Up);
+					Ok(EventState::Consumed)
+				} else if key_match(e, self.key_config.keys.move_right) {
+					self.move_hunk_selection(ScrollType::Down);
+					Ok(EventState::Consumed)
+				} else if key_match(e, self.key_config.keys.move_left) {
+					self.move_hunk_selection(ScrollType::Up);
 					Ok(EventState::Consumed)
 				} else if key_match(e, self.key_config.keys.page_up) {
 					self.move_selection(ScrollType::PageUp);
@@ -1042,6 +1116,12 @@ impl Component for DiffComponent {
 							},
 							_ => self.copy_event(e)
 						}
+					}
+				}else if let KeyCode::Char(c) = e.code {
+					if let Some(_d) = c.to_digit(10) {
+						return self.movement_event(e);
+					}else{
+						Ok(EventState::NotConsumed)
 					}
 				} else {
 					Ok(EventState::NotConsumed)
