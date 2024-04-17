@@ -233,6 +233,12 @@ impl InspectCommitComponent {
 	}
 
 	///
+	pub fn on_tick(&mut self)
+	{
+		self.diff.on_tick();
+	}
+
+	///
 	pub fn open(&mut self, open: InspectCommitOpen) -> Result<()> {
 		self.open_request = Some(open);
 		self.show()?;

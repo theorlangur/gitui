@@ -31,6 +31,7 @@ use ratatui::{
 	Frame,
 };
 use std::{borrow::Cow, cell::Cell, cmp, path::Path};
+use std::time::SystemTime;
 
 #[derive(Default)]
 struct Current {
@@ -131,6 +132,7 @@ pub struct DiffComponent {
 	key_config: SharedKeyConfig,
 	is_immutable: bool,
 	copy_op: CopyState,
+	copied_region: Option<(Selection, SystemTime)>,
 }
 
 impl DiffComponent {
@@ -158,7 +160,8 @@ impl DiffComponent {
 			key_config,
 			is_immutable,
 			repo,
-			copy_op: CopyState::None
+			copy_op: CopyState::None,
+			copied_region: None
 		}
 	}
 	///
@@ -183,6 +186,21 @@ impl DiffComponent {
 		self.selected_hunk = None;
 		self.pending = pending;
 	}
+
+	pub fn on_tick(&mut self)
+	{ 
+		if let Some((copied, start)) = self.copied_region {
+			let n = SystemTime::now();
+			if n.duration_since(start).unwrap().as_millis() >= 90 {
+				self.copied_region = None;
+			}else
+			{
+				self.copied_region = Some((copied, start));
+				self.queue_update();
+			}
+		}
+	}
+
 	///
 	pub fn update(
 		&mut self,
@@ -335,11 +353,13 @@ impl DiffComponent {
 			};
 		}else if key_match(e, self.key_config.keys.move_up) { 
 			self.copy_op  = match self.copy_op {
+				CopyState::Pending => CopyState::LinesUp(1),
 				CopyState::Size(s) => CopyState::LinesUp(s),
 				_ => CopyState::None
 			};
 		}else if key_match(e, self.key_config.keys.move_down) { 
 			self.copy_op  = match self.copy_op {
+				CopyState::Pending => CopyState::LinesDown(1),
 				CopyState::Size(s) => CopyState::LinesDown(s),
 				_ => CopyState::None
 			};
@@ -359,9 +379,11 @@ impl DiffComponent {
 			self.copy_op = CopyState::None;
 		}
 
+		let orig_start = self.selection.get_start();
 		//try execute
 		match self.copy_op {
 			CopyState::Line => {
+				self.copied_region = Some((self.selection, SystemTime::now())).into();
 				self.copy_selection();
 				self.copy_op = CopyState::None;
 			},
@@ -371,26 +393,29 @@ impl DiffComponent {
 					self.update_selection(hr.0);
 					//expand to the whole size of the hunk
 					self.selection = Selection::Multiple(hr.0, hr.1);
+					self.copied_region = Some((self.selection, SystemTime::now())).into();
 					//copy
 					self.copy_selection();
 					//place selection at the end of the hunk
-					self.update_selection(hr.1 - 1);
+					self.update_selection(orig_start);
 				}
 				self.copy_op = CopyState::None;
 			},
 			CopyState::LinesUp(s) => {
 				let start = self.selection.get_start();
 				self.selection = Selection::Multiple(start, start.saturating_sub(s.try_into().unwrap()));
+				self.copied_region = Some((self.selection, SystemTime::now())).into();
 				self.copy_selection();
-				self.update_selection(self.selection.get_top());
+				self.update_selection(orig_start);
 				self.copy_op = CopyState::None;
 			},
 			CopyState::LinesDown(s) => {
 				let start = self.selection.get_start();
 				let n_lines = self.lines_count();
 				self.selection = Selection::Multiple(start, cmp::min(start.saturating_add(s.try_into().unwrap()), n_lines));
+				self.copied_region = Some((self.selection, SystemTime::now())).into();
 				self.copy_selection();
-				self.update_selection(self.selection.get_end());
+				self.update_selection(orig_start);
 				self.copy_op = CopyState::None;
 			},
 			_ => ()
@@ -487,6 +512,7 @@ impl DiffComponent {
 								DiffLineType::Delete
 							},
 							false,
+							false
 						),
 					),
 					Span::raw(Cow::from(")")),
@@ -520,13 +546,16 @@ impl DiffComponent {
 							if line_cursor >= min
 								&& line_cursor <= max
 							{
+								let &selection = if let Some(copied) = self.copied_region.as_ref() { &copied.0 } else { &self.selection };
+								let copied = self.copied_region.is_some();
+
 								res.push(Self::get_line_to_add(
 									width,
 									line,
 									self.focused()
-										&& self
-											.selection
+										&& selection
 											.contains(line_cursor),
+											copied,
 									hunk_selected,
 									i == hunk_len - 1,
 									&self.theme,
@@ -551,6 +580,7 @@ impl DiffComponent {
 		width: u16,
 		line: &'a DiffLine,
 		selected: bool,
+		copied : bool,
 		selected_hunk: bool,
 		end_of_hunk: bool,
 		theme: &SharedTheme,
@@ -585,11 +615,12 @@ impl DiffComponent {
 			format!("{content}\n")
 		};
 
+		let copied_color = selected && copied;
 		Spans::from(vec![
 			left_side_of_line,
 			Span::styled(
 				Cow::from(filled),
-				theme.diff_line(line.line_type, selected),
+				theme.diff_line(line.line_type, selected, copied_color),
 			),
 		])
 	}

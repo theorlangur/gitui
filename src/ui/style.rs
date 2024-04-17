@@ -30,6 +30,7 @@ pub struct Theme {
 	diff_file_removed: Color,
 	diff_file_moved: Color,
 	diff_file_modified: Color,
+	line_copied_bg: Color,
 	commit_hash: Color,
 	commit_time: Color,
 	commit_author: Color,
@@ -158,7 +159,13 @@ impl Theme {
 	}
 
 	fn apply_select(&self, style: Style, selected: bool) -> Style {
-		if selected {
+		self.apply_select_or_copied(style, selected, false)
+	}
+
+	fn apply_select_or_copied(&self, style: Style, selected: bool, copied: bool) -> Style {
+		if copied {
+			style.bg(self.line_copied_bg)
+		}else if selected {
 			style.bg(self.selection_bg).fg(self.selection_fg)
 		} else {
 			style
@@ -185,6 +192,7 @@ impl Theme {
 		&self,
 		typ: DiffLineType,
 		selected: bool,
+		copied: bool
 	) -> Style {
 		let style = match typ {
 			DiffLineType::Add => {
@@ -196,14 +204,14 @@ impl Theme {
 			DiffLineType::Header => Style::default()
 				.fg(self.disabled_fg)
 				.add_modifier(Modifier::BOLD),
-			DiffLineType::None => Style::default().fg(if selected {
+			DiffLineType::None => Style::default().fg( if selected {
 				self.command_fg
 			} else {
 				Color::Reset
 			}),
 		};
 
-		self.apply_select(style, selected)
+		self.apply_select_or_copied(style, selected, copied)
 	}
 
 	pub fn text_danger(&self) -> Style {
@@ -330,6 +338,7 @@ impl Default for Theme {
 			diff_file_removed: Color::LightRed,
 			diff_file_moved: Color::LightMagenta,
 			diff_file_modified: Color::Yellow,
+			line_copied_bg: Color::LightYellow,
 			commit_hash: Color::Magenta,
 			commit_time: Color::LightCyan,
 			commit_author: Color::Green,

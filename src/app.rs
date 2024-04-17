@@ -546,6 +546,7 @@ impl App {
 		self.stashing_tab.update()?;
 		self.stashlist_tab.update()?;
 		self.reset_popup.update()?;
+		self.inspect_commit_popup.on_tick();
 
 		self.update_commands();
 
