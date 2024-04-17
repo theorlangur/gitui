@@ -518,6 +518,7 @@ impl DiffComponent {
 					Span::raw(Cow::from(")")),
 				])]);
 			} else {
+				let num_width = (self.lines_count() as f32).log10() as u16 + 1;
 				let min = self.vertical_scroll.get_top();
 				let max = min + height as usize;
 
@@ -561,6 +562,8 @@ impl DiffComponent {
 									&self.theme,
 									self.horizontal_scroll
 										.get_right(),
+										num_width,
+										line_cursor + 1
 								));
 								lines_added += 1;
 							}
@@ -585,8 +588,12 @@ impl DiffComponent {
 		end_of_hunk: bool,
 		theme: &SharedTheme,
 		scrolled_right: usize,
+		line_number_width: u16,
+		line_index: usize
 	) -> Spans<'a> {
 		let style = theme.diff_hunk_marker(selected_hunk);
+
+		let num_block = Span::styled(format!("{line_index:w$}", w = line_number_width as usize), style);
 
 		let left_side_of_line = if end_of_hunk {
 			Span::styled(Cow::from(symbols::line::BOTTOM_LEFT), style)
@@ -617,6 +624,7 @@ impl DiffComponent {
 
 		let copied_color = selected && copied;
 		Spans::from(vec![
+					num_block,
 			left_side_of_line,
 			Span::styled(
 				Cow::from(filled),
