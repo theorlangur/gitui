@@ -85,7 +85,9 @@ use std::{
 use ui::style::Theme;
 use watcher::RepoWatcher;
 
-static TICK_INTERVAL: Duration = Duration::from_millis(120);
+static TICK_INTERVAL_INT: u64  = 120;//ms
+static UPDATE_INTERVAL_INT: u64 = 5000;//ms
+static TICK_INTERVAL: Duration = Duration::from_millis(TICK_INTERVAL_INT);
 static SPINNER_INTERVAL: Duration = Duration::from_millis(80);
 
 ///
@@ -326,6 +328,8 @@ fn run_app(
 
 	log::trace!("app start: {} ms", app_start.elapsed().as_millis());
 
+	let mut update_ticker : u64 = 0;
+
 	loop {
 		let event = if first_update {
 			first_update = false;
@@ -356,6 +360,7 @@ fn run_app(
 
 			scope_time!("loop");
 
+
 			match event {
 				QueueEvent::InputEvent(ev) => {
 					if matches!(
@@ -367,7 +372,14 @@ fn run_app(
 					}
 					app.event(ev)?;
 				}
-				QueueEvent::Tick | QueueEvent::Notify => {
+				QueueEvent::Tick => {
+					update_ticker += TICK_INTERVAL_INT;
+					if update_ticker > UPDATE_INTERVAL_INT {
+						update_ticker %= UPDATE_INTERVAL_INT;
+						app.update()?;
+					}
+				}
+				QueueEvent::Notify => {
 					app.update()?;
 				}
 				QueueEvent::AsyncEvent(ev) => {
