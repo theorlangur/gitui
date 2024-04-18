@@ -372,15 +372,12 @@ fn run_app(
 					}
 					app.event(ev)?;
 				}
-				QueueEvent::Tick => {
+				QueueEvent::Tick | QueueEvent::Notify => {
 					update_ticker += TICK_INTERVAL_INT;
 					if update_ticker > UPDATE_INTERVAL_INT {
 						update_ticker %= UPDATE_INTERVAL_INT;
 						app.update()?;
 					}
-				}
-				QueueEvent::Notify => {
-					app.update()?;
 				}
 				QueueEvent::AsyncEvent(ev) => {
 					if !matches!(
