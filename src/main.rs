@@ -378,6 +378,7 @@ fn run_app(
 						update_ticker %= UPDATE_INTERVAL_INT;
 						app.update()?;
 					}
+					app.on_tick()?;
 				}
 				QueueEvent::AsyncEvent(ev) => {
 					if !matches!(

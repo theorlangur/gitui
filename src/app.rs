@@ -534,6 +534,13 @@ impl App {
 		Ok(())
 	}
 
+	pub fn on_tick(&mut self) -> Result<()> {
+		self.inspect_commit_popup.on_tick();
+		self.status_tab.on_tick();
+		self.compare_commits_popup.on_tick();
+		Ok(())
+	}
+
 	//TODO: do we need this?
 	/// forward ticking to components that require it
 	pub fn update(&mut self) -> Result<()> {
@@ -546,7 +553,6 @@ impl App {
 		self.stashing_tab.update()?;
 		self.stashlist_tab.update()?;
 		self.reset_popup.update()?;
-		self.inspect_commit_popup.on_tick();
 
 		self.update_commands();
 

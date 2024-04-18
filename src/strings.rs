@@ -618,6 +618,48 @@ pub mod commands {
 			CMD_GROUP_GENERAL,
 		)
 	}
+	pub fn copy_below(key_config: &SharedKeyConfig, l:usize) -> CommandText {
+		CommandText::new(
+			format!(
+				"{} Below [{}]",
+				l,
+				key_config.get_hint(key_config.keys.move_down),
+			),
+			"copy...",
+			CMD_GROUP_DIFF,
+		)
+	}
+	pub fn copy_above(key_config: &SharedKeyConfig, l:usize) -> CommandText {
+		CommandText::new(
+			format!(
+				"{} Above [{}]",
+				l,
+				key_config.get_hint(key_config.keys.move_up),
+			),
+			"copy...",
+			CMD_GROUP_DIFF,
+		)
+	}
+	pub fn copy_hunk(key_config: &SharedKeyConfig) -> CommandText {
+		CommandText::new(
+			format!(
+				"Hunk [{}]",
+				key_config.get_hint(key_config.keys.copy_hunk),
+			),
+			"copy...",
+			CMD_GROUP_DIFF,
+		)
+	}
+	pub fn copy_line(key_config: &SharedKeyConfig) -> CommandText {
+		CommandText::new(
+			format!(
+				"Line [{}]",
+				key_config.get_hint(key_config.keys.copy),
+			),
+			"copy...",
+			CMD_GROUP_DIFF,
+		)
+	}
 	pub fn copy(key_config: &SharedKeyConfig) -> CommandText {
 		CommandText::new(
 			format!(

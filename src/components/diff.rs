@@ -1061,6 +1061,42 @@ impl Component for DiffComponent {
 			self.focused(),
 		));
 
+		match self.copy_op  {
+			CopyState::None => {
+				out.push(CommandInfo::new(
+					strings::commands::copy(&self.key_config),
+					true,
+					self.focused(),
+				));
+			},
+			_ => {
+				out.push(CommandInfo::new(
+					strings::commands::copy_hunk(&self.key_config),
+					true,
+					self.focused(),
+				));
+				out.push(CommandInfo::new(
+					strings::commands::copy_line(&self.key_config),
+					true,
+					self.focused(),
+				));
+				let lines = if let CopyState::Size(s) = &self.copy_op {
+					*s
+				}else { 2 };
+				out.push(CommandInfo::new(
+					strings::commands::copy_below(&self.key_config, lines as usize),
+					true,
+					self.focused(),
+				));
+				out.push(CommandInfo::new(
+					strings::commands::copy_above(&self.key_config, lines as usize),
+					true,
+					self.focused(),
+				));
+				return CommandBlocking::Blocking;
+			},
+		}
+
 		out.push(
 			CommandInfo::new(
 				strings::commands::diff_home_end(&self.key_config),
@@ -1109,12 +1145,6 @@ impl Component for DiffComponent {
 				self.focused() && self.is_stage(),
 			));
 		}
-
-		out.push(CommandInfo::new(
-			strings::commands::copy(&self.key_config),
-			true,
-			self.focused(),
-		));
 
 		CommandBlocking::PassingOn
 	}

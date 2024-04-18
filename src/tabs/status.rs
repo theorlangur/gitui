@@ -220,6 +220,12 @@ impl Status {
 		}
 	}
 
+	///
+	pub fn on_tick(&mut self)
+	{
+		self.diff.on_tick();
+	}
+
 	fn draw_branch_state<B: ratatui::backend::Backend>(
 		&self,
 		f: &mut ratatui::Frame<B>,

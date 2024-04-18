@@ -198,6 +198,12 @@ impl CompareCommitsComponent {
 	}
 
 	///
+	pub fn on_tick(&mut self)
+	{
+		self.diff.on_tick();
+	}
+
+	///
 	pub fn open(&mut self, open: InspectCommitOpen) -> Result<()> {
 		let compare_id = if let Some(compare_id) = open.compare_id {
 			compare_id
