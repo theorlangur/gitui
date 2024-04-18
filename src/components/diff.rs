@@ -116,7 +116,7 @@ enum CopyState
 
 enum SearchState
 {
-	IncSearch(String),
+	IncSearch(String, usize),
 	Search(String)
 }
 
@@ -138,7 +138,7 @@ impl Search{
 	pub fn is_active(&self) -> bool { self.search.is_some() }
 	pub fn find_in_str(&self, line: &str) -> bool {
 		match self.search.as_ref().unwrap() {
-			SearchState::IncSearch(s) => line.find(s).is_some(),
+			SearchState::IncSearch(s, _) => line.find(s).is_some(),
 			SearchState::Search(s) => line.find(s).is_some(),
 		}
 	}
@@ -402,63 +402,91 @@ impl DiffComponent {
 		}
 	}
 
+	fn search_forward(&mut self, start: Option<usize>)
+	{
+		let start_index = start.unwrap_or(self.selection.get_start());
+		let line_num = self
+			.diff
+			.iter()
+			.flat_map(|diff| diff.hunks.iter())
+			.flat_map(|hunk| hunk.lines.iter())
+			.enumerate()
+			.skip(start_index + 1)
+			.find(|(_idx, line)|{
+				self.search.find_in_str(&*line.content)
+			})
+		.map_or(start_index, |(idx, _line)| { idx });
+		self.update_selection(line_num);
+	}
+
+	fn search_backwards(&mut self, start: Option<usize>)
+	{
+		let start_index = start.unwrap_or(self.selection.get_start());
+		let line_num = self
+			.diff
+			.iter()
+			.flat_map(|diff| diff.hunks.iter())
+			.flat_map(|hunk| hunk.lines.iter())
+			.enumerate()
+			.take(start_index)
+			.filter(|(_idx, line)|{
+				self.search.find_in_str(&*line.content)
+			})
+		.last()
+			.map_or(start_index, |(idx, _line)| { idx });
+		self.update_selection(line_num);
+	}
+
 	fn search_event(&mut self, e: &KeyEvent) -> Result<EventState> {
 		if key_match(e, self.key_config.keys.enter) { 
 			self.search.search = match &self.search.search {
-				Some(SearchState::IncSearch(s)) => if !s.is_empty() { Some(SearchState::Search(s.to_string())) } else { None },
+				Some(SearchState::IncSearch(s, _)) => if !s.is_empty() { Some(SearchState::Search(s.to_string())) } else { None },
 				Some(SearchState::Search(s)) => Some(SearchState::Search(s.to_string())),
 				None => None
 			};
 			return Ok(EventState::Consumed);
 		}else if key_match(e, self.key_config.keys.exit_popup)
 		{
-			if let Some(SearchState::IncSearch(_)) = self.search.search.as_ref() {
-				self.search.search = None;
+			if let Some(SearchState::IncSearch(_,p)) = self.search.search.take() {
+				self.update_selection(p);
 				return Ok(EventState::Consumed);
 			}
 			return Ok(EventState::NotConsumed);
 		} 
 		if let Some(SearchState::Search(_s)) = &self.search.search {
 			if key_match(e, self.key_config.keys.search_next) { 
-				let start_index = self.selection.get_start();
-				let line_num = self
-					.diff
-					.iter()
-					.flat_map(|diff| diff.hunks.iter())
-					.flat_map(|hunk| hunk.lines.iter())
-					.enumerate()
-					.skip(start_index + 1)
-					.find(|(_idx, line)|{
-						self.search.find_in_str(&*line.content)
-					})
-					.map_or(start_index, |(idx, _line)| { idx });
-				self.update_selection(line_num);
+				match self.search.direction {
+					SearchDirection::Forward => self.search_forward(None),
+					SearchDirection::Backward => self.search_backwards(None),
+				}
 				return Ok(EventState::Consumed);
 			}else if key_match(e, self.key_config.keys.search_prev) { 
-				let start_index = self.selection.get_start();
-				let line_num = self
-					.diff
-					.iter()
-					.flat_map(|diff| diff.hunks.iter())
-					.flat_map(|hunk| hunk.lines.iter())
-					.enumerate()
-					.take(start_index)
-					.filter(|(_idx, line)|{
-						self.search.find_in_str(&*line.content)
-					})
-					.last()
-					.map_or(start_index, |(idx, _line)| { idx });
-				self.update_selection(line_num);
+				match self.search.direction {
+					SearchDirection::Backward => self.search_forward(None),
+					SearchDirection::Forward => self.search_backwards(None),
+				}
 				return Ok(EventState::Consumed);
 			}
 			return Ok(EventState::NotConsumed);
-		}else if let Some(SearchState::IncSearch(s)) = &mut self.search.search {
+		}else if let Some(SearchState::IncSearch(s, orig_pos)) = &mut self.search.search {
 			if let KeyCode::Char(c) = e.code {
 				if !c.is_control() {
 					let cs = c.to_string();
 					*s += &cs;
+					let opos = *orig_pos;
+					match self.search.direction {
+						SearchDirection::Forward => self.search_forward(Some(opos)),
+						SearchDirection::Backward => self.search_backwards(Some(opos)),
+					}
 				}
 				return Ok(EventState::Consumed);
+			}else if let KeyCode::Backspace = e.code {
+				s.remove(s.len() - 1);
+				let opos = *orig_pos;
+				match self.search.direction {
+					SearchDirection::Forward => self.search_forward(Some(opos)),
+					SearchDirection::Backward => self.search_backwards(Some(opos)),
+				}
 			}
 		}
 		return Ok(EventState::NotConsumed);
@@ -1143,13 +1171,13 @@ impl Component for DiffComponent {
 					self.move_selection(ScrollType::PageUp);
 					Ok(EventState::Consumed)
 				} else if key_match(e, self.key_config.keys.start_search_forward_init) {
-					self.search.search = Some(SearchState::IncSearch(String::new()));
+					self.search.search = Some(SearchState::IncSearch(String::new(), self.selection.get_start()));
 					self.search.direction = SearchDirection::Forward;
 					self.search.smart_case = true;
 					self.search.start_line = self.selection.get_start();
 					Ok(EventState::Consumed)
 				} else if key_match(e, self.key_config.keys.start_search_backward_init) {
-					self.search.search = Some(SearchState::IncSearch(String::new()));
+					self.search.search = Some(SearchState::IncSearch(String::new(), self.selection.get_start()));
 					self.search.direction = SearchDirection::Backward;
 					self.search.smart_case = true;
 					self.search.start_line = self.selection.get_start();
