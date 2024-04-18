@@ -114,6 +114,36 @@ enum CopyState
 	Hunk
 }
 
+enum SearchState
+{
+	IncSearch(String),
+	Search(String)
+}
+
+enum SearchDirection
+{
+	Forward,
+	Backward
+}
+
+struct Search
+{
+	pub search: Option<SearchState>,
+	pub direction: SearchDirection,
+	pub smart_case: bool,
+	pub start_line: usize
+}
+
+impl Search{
+	pub fn is_active(&self) -> bool { self.search.is_some() }
+	pub fn find_in_str(&self, line: &str) -> bool {
+		match self.search.as_ref().unwrap() {
+			SearchState::IncSearch(s) => line.find(s).is_some(),
+			SearchState::Search(s) => line.find(s).is_some(),
+		}
+	}
+}
+
 ///
 pub struct DiffComponent {
 	repo: RepoPathRef,
@@ -133,7 +163,8 @@ pub struct DiffComponent {
 	is_immutable: bool,
 	copy_op: CopyState,
 	copied_region: Option<(Selection, SystemTime)>,
-	pending_movement: Option<usize>
+	pending_movement: Option<usize>,
+	search: Search
 }
 
 impl DiffComponent {
@@ -163,7 +194,8 @@ impl DiffComponent {
 			repo,
 			copy_op: CopyState::None,
 			copied_region: None,
-			pending_movement: None
+			pending_movement: None,
+			search: Search{search: None, direction: SearchDirection::Forward, smart_case: true, start_line: 0}
 		}
 	}
 	///
@@ -368,6 +400,68 @@ impl DiffComponent {
 				)
 			);
 		}
+	}
+
+	fn search_event(&mut self, e: &KeyEvent) -> Result<EventState> {
+		if key_match(e, self.key_config.keys.enter) { 
+			self.search.search = match &self.search.search {
+				Some(SearchState::IncSearch(s)) => if !s.is_empty() { Some(SearchState::Search(s.to_string())) } else { None },
+				Some(SearchState::Search(s)) => Some(SearchState::Search(s.to_string())),
+				None => None
+			};
+			return Ok(EventState::Consumed);
+		}else if key_match(e, self.key_config.keys.exit_popup)
+		{
+			if let Some(SearchState::IncSearch(_)) = self.search.search.as_ref() {
+				self.search.search = None;
+				return Ok(EventState::Consumed);
+			}
+			return Ok(EventState::NotConsumed);
+		} 
+		if let Some(SearchState::Search(_s)) = &self.search.search {
+			if key_match(e, self.key_config.keys.search_next) { 
+				let start_index = self.selection.get_start();
+				let line_num = self
+					.diff
+					.iter()
+					.flat_map(|diff| diff.hunks.iter())
+					.flat_map(|hunk| hunk.lines.iter())
+					.enumerate()
+					.skip(start_index + 1)
+					.find(|(_idx, line)|{
+						self.search.find_in_str(&*line.content)
+					})
+					.map_or(start_index, |(idx, _line)| { idx });
+				self.update_selection(line_num);
+				return Ok(EventState::Consumed);
+			}else if key_match(e, self.key_config.keys.search_prev) { 
+				let start_index = self.selection.get_start();
+				let line_num = self
+					.diff
+					.iter()
+					.flat_map(|diff| diff.hunks.iter())
+					.flat_map(|hunk| hunk.lines.iter())
+					.enumerate()
+					.take(start_index)
+					.filter(|(_idx, line)|{
+						self.search.find_in_str(&*line.content)
+					})
+					.last()
+					.map_or(start_index, |(idx, _line)| { idx });
+				self.update_selection(line_num);
+				return Ok(EventState::Consumed);
+			}
+			return Ok(EventState::NotConsumed);
+		}else if let Some(SearchState::IncSearch(s)) = &mut self.search.search {
+			if let KeyCode::Char(c) = e.code {
+				if !c.is_control() {
+					let cs = c.to_string();
+					*s += &cs;
+				}
+				return Ok(EventState::Consumed);
+			}
+		}
+		return Ok(EventState::NotConsumed);
 	}
 
 	fn movement_event(&mut self, e: &KeyEvent) -> Result<EventState> {
@@ -1001,6 +1095,12 @@ impl Component for DiffComponent {
 	fn event(&mut self, ev: &Event) -> Result<EventState> {
 		if self.focused() {
 			if let Event::Key(e) = ev {
+				if self.search.is_active() {
+					if let Ok(EventState::Consumed) = self.search_event(e) {
+						return Ok(EventState::Consumed);
+					}
+				}
+
 				match self.copy_op {
 					CopyState::None => (),
 					_ => return self.copy_event(e)
@@ -1041,6 +1141,18 @@ impl Component for DiffComponent {
 					Ok(EventState::Consumed)
 				} else if key_match(e, self.key_config.keys.page_up) {
 					self.move_selection(ScrollType::PageUp);
+					Ok(EventState::Consumed)
+				} else if key_match(e, self.key_config.keys.start_search_forward_init) {
+					self.search.search = Some(SearchState::IncSearch(String::new()));
+					self.search.direction = SearchDirection::Forward;
+					self.search.smart_case = true;
+					self.search.start_line = self.selection.get_start();
+					Ok(EventState::Consumed)
+				} else if key_match(e, self.key_config.keys.start_search_backward_init) {
+					self.search.search = Some(SearchState::IncSearch(String::new()));
+					self.search.direction = SearchDirection::Backward;
+					self.search.smart_case = true;
+					self.search.start_line = self.selection.get_start();
 					Ok(EventState::Consumed)
 				} else if key_match(e, self.key_config.keys.page_down)
 				{
