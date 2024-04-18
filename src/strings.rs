@@ -1617,6 +1617,18 @@ pub mod commands {
 		)
 	}
 
+	pub fn cancel_search_init_str(key_config: &SharedKeyConfig, s: &str) -> CommandText {
+		CommandText::new(
+			format!(
+				"Cancel search '{}' [{}]",
+				s,
+				key_config.get_hint(key_config.keys.exit_popup),
+			),
+			"Cancel current search initiation",
+			CMD_GROUP_GENERAL,
+		)
+	}
+
 	pub fn search_for_text(key_config: &SharedKeyConfig, num: &str) -> CommandText {
 		CommandText::new(
 			format!(

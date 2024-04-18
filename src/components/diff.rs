@@ -1097,6 +1097,36 @@ impl Component for DiffComponent {
 			},
 		}
 
+		if self.search.is_active() {
+			match self.search.search.as_ref() {
+				Some(SearchState::IncSearch(s, _l)) => {
+					out.push(CommandInfo::new(
+						strings::commands::cancel_search_init_str(&self.key_config, s),
+						true,
+						self.focused(),
+					));
+				},
+				Some(SearchState::Search(s)) => {
+					out.push(CommandInfo::new(
+						strings::commands::search_for_text_next(&self.key_config, s),
+						true,
+						self.focused(),
+					));
+					out.push(CommandInfo::new(
+						strings::commands::search_for_text_prev(&self.key_config, s),
+						true,
+						self.focused(),
+					));
+				}
+				_ => ()
+			}
+		}
+		out.push(CommandInfo::new(
+			strings::commands::start_search(&self.key_config),
+			true,
+			self.focused(),
+		));
+
 		out.push(
 			CommandInfo::new(
 				strings::commands::diff_home_end(&self.key_config),
