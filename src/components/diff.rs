@@ -137,9 +137,16 @@ struct Search
 impl Search{
 	pub fn is_active(&self) -> bool { self.search.is_some() }
 	pub fn find_in_str(&self, line: &str) -> bool {
-		match self.search.as_ref().unwrap() {
-			SearchState::IncSearch(s, _) => line.find(s).is_some(),
-			SearchState::Search(s) => line.find(s).is_some(),
+		if self.smart_case {
+			match self.search.as_ref().unwrap() {
+				SearchState::IncSearch(s, _) => line.to_lowercase().find(&s.to_lowercase()).is_some(),
+				SearchState::Search(s) => line.to_lowercase().find(&s.to_lowercase()).is_some(),
+			}
+		}else{
+			match self.search.as_ref().unwrap() {
+				SearchState::IncSearch(s, _) => line.find(s).is_some(),
+				SearchState::Search(s) => line.find(s).is_some(),
+			}
 		}
 	}
 }
@@ -447,11 +454,12 @@ impl DiffComponent {
 			return Ok(EventState::Consumed);
 		}else if key_match(e, self.key_config.keys.exit_popup)
 		{
+			let was_active = self.search.is_active();
 			if let Some(SearchState::IncSearch(_,p)) = self.search.search.take() {
 				self.update_selection(p);
 				return Ok(EventState::Consumed);
 			}
-			return Ok(EventState::NotConsumed);
+			return if was_active { Ok(EventState::Consumed) } else { Ok(EventState::NotConsumed) };
 		} 
 		if let Some(SearchState::Search(_s)) = &self.search.search {
 			if key_match(e, self.key_config.keys.search_next) { 
@@ -471,6 +479,9 @@ impl DiffComponent {
 		}else if let Some(SearchState::IncSearch(s, orig_pos)) = &mut self.search.search {
 			if let KeyCode::Char(c) = e.code {
 				if !c.is_control() {
+					if c.is_uppercase() {
+						self.search.smart_case = false;
+					}
 					let cs = c.to_string();
 					*s += &cs;
 					let opos = *orig_pos;
