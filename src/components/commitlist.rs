@@ -60,6 +60,14 @@ enum KeyComboState {
 	FilterInit,
 }
 
+/*
+enum RebaseAction {
+	Drop,
+	Squash,
+	Fixup,
+	Reword
+}*/
+
 #[derive(PartialEq, Clone)]
 pub enum ExternalSearchRequest {
 	Empty,
@@ -75,6 +83,7 @@ pub struct CommitList {
 	count_total: usize,
 	items: ItemBatch,
 	marked: Vec<(usize, CommitId)>,
+	//rebase_marked: Vec<(usize, CommitId, RebaseAction)>,
 	scroll_state: (Instant, f32),
 	tags: Option<Tags>,
 	local_branches: BTreeMap<CommitId, Vec<BranchInfo>>,
@@ -113,6 +122,7 @@ impl CommitList {
 			repo,
 			items: ItemBatch::default(),
 			marked: Vec::with_capacity(2),
+			//rebase_marked: Vec::with_capacity(2),
 			selection: 0,
 			count_total: 0,
 			scroll_state: (Instant::now(), 0_f32),
