@@ -25,6 +25,7 @@ impl From<RepositoryState> for RepoState {
 			RepositoryState::Merge => Self::Merge,
 			RepositoryState::Revert => Self::Revert,
 			RepositoryState::RebaseMerge => Self::Rebase,
+			RepositoryState::RebaseInteractive => Self::Rebase,
 			_ => {
 				log::warn!("state not supported yet: {:?}", state);
 				Self::Other

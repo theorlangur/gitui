@@ -1116,6 +1116,17 @@ pub mod commands {
 			CMD_GROUP_GENERAL,
 		)
 	}
+	pub fn rebase_interactive(key_config: &SharedKeyConfig) -> CommandText {
+		CommandText::new(
+			format!(
+				"Rebase [{}]",
+				key_config
+					.get_hint(key_config.keys.rebase_interactive),
+			),
+			"Interactive Rebase",
+			CMD_GROUP_GENERAL,
+		)
+	}
 
 	pub fn continue_rebase(
 		key_config: &SharedKeyConfig,
@@ -1123,9 +1134,22 @@ pub mod commands {
 		CommandText::new(
 			format!(
 				"Continue rebase [{}]",
-				key_config.get_hint(key_config.keys.rebase_branch),
+				key_config.get_hint(key_config.keys.rebase_continue),
 			),
 			"continue ongoing rebase",
+			CMD_GROUP_GENERAL,
+		)
+	}
+
+	pub fn skip_rebase(
+		key_config: &SharedKeyConfig,
+	) -> CommandText {
+		CommandText::new(
+			format!(
+				"Rebase skip [{}]",
+				key_config.get_hint(key_config.keys.rebase_skip),
+			),
+			"skip commit in ongoing rebase",
 			CMD_GROUP_GENERAL,
 		)
 	}
@@ -1134,7 +1158,7 @@ pub mod commands {
 		CommandText::new(
 			format!(
 				"Abort rebase [{}]",
-				key_config.get_hint(key_config.keys.abort_merge),
+				key_config.get_hint(key_config.keys.rebase_abort),
 			),
 			"abort ongoing rebase",
 			CMD_GROUP_GENERAL,

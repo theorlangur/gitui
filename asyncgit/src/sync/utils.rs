@@ -1,7 +1,7 @@
 //! sync git api (various methods)
 
 use super::{
-	repository::repo, CommitId, RepoPath, ShowUntrackedFilesConfig,
+	repo_state, repository::repo, CommitId, RepoPath, RepoState, ShowUntrackedFilesConfig
 };
 use crate::{
 	error::{Error, Result},
@@ -87,8 +87,17 @@ pub fn get_head_name(repo_path: &RepoPath) -> Result<String> {
 		let n = href.shorthand();
 		Ok(n.unwrap_or("<unknown branch>").into())
 	} else if let Some(commit) = href.target() {
+		let git_state = repo_state(repo_path)
+			.unwrap_or(RepoState::Clean);
+		let state_str: &str = match git_state {
+			RepoState::Revert => "(Revert) ",
+			RepoState::Rebase => "(Rebase) ",
+			RepoState::Merge => "(Merge) ",
+			_ => "",
+		};
 		Ok(format!(
-			"Detached at {}",
+			"{}Detached at {}",
+			state_str,
 			commit.to_string().chars().take(7).collect::<String>()
 		))
 	} else {

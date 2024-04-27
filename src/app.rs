@@ -14,7 +14,7 @@ use crate::{
 		PushComponent, PushTagsComponent, RenameBranchComponent,
 		ResetPopupComponent, RevisionFilesPopup, StashMsgComponent,
 		SubmodulesListComponent, TagCommitComponent,
-		TagListComponent,
+		TagListComponent,rebase_commits_interactive_with_editor, rebase_interactive_abort, rebase_interactive_skip, rebase_commits_continue_with_editor
 	},
 	input::{Input, InputEvent, InputState},
 	keys::{key_match, KeyConfig, SharedKeyConfig},
@@ -30,6 +30,7 @@ use crate::{
 	AsyncAppNotification, AsyncNotification,
 };
 use anyhow::{bail, Result};
+use asyncgit::sync::CommitId;
 use asyncgit::{
 	sync::{self, utils::repo_work_dir, RepoPath, RepoPathRef},
 	AsyncGitNotification, PushType,
@@ -64,6 +65,8 @@ enum ExternalEditorRequest {
 	ExternalEditorWithPath(String),
 	ShowEditor,
 	EditorToCommit,
+	RebaseInteractive(CommitId),
+	RebaseInteractiveContinue,
 }
 
 /// the main app type
@@ -515,6 +518,14 @@ impl App {
 							self.status_tab.get_files_changes()?,
 						)
 					}
+					ExternalEditorRequest::RebaseInteractive(commit_id) => {
+						rebase_commits_interactive_with_editor(&self.repo.borrow().gitpath().to_str().unwrap(), commit_id)?;
+						Ok(())
+					}
+					ExternalEditorRequest::RebaseInteractiveContinue => {
+						rebase_commits_continue_with_editor(&self.repo.borrow().gitpath().to_str().unwrap())?;
+						Ok(())
+					}
 				};
 				self.external_editor_request =
 					ExternalEditorRequest::None;
@@ -895,6 +906,26 @@ impl App {
 				self.external_editor_request =
 					ExternalEditorRequest::EditorToCommit;
 				flags.insert(NeedsUpdate::COMMANDS);
+			}
+			InternalEvent::RebaseInteractiveWithEditor(id) => {
+				self.input.set_polling(false);
+				self.external_editor_request =
+					ExternalEditorRequest::RebaseInteractive(id);
+				flags.insert(NeedsUpdate::ALL);
+			}
+			InternalEvent::RebaseInteractiveContinue => {
+				self.input.set_polling(false);
+				self.external_editor_request =
+					ExternalEditorRequest::RebaseInteractiveContinue;
+				flags.insert(NeedsUpdate::ALL);
+			}
+			InternalEvent::RebaseInteractiveAbort => {
+				rebase_interactive_abort(&self.repo.borrow().gitpath().to_str().unwrap())?;
+				flags.insert(NeedsUpdate::ALL);
+			}
+			InternalEvent::RebaseInteractiveSkip => {
+				rebase_interactive_skip(&self.repo.borrow().gitpath().to_str().unwrap())?;
+				flags.insert(NeedsUpdate::ALL);
 			}
 			InternalEvent::RewordCommit(id) => {
 				self.commit.open(Some(id))?;

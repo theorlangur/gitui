@@ -111,6 +111,14 @@ pub enum InternalEvent {
 	/// open external editor to edit commit msg and commit
 	CommitWithExternalEditor,
 	///
+	RebaseInteractiveWithEditor(CommitId),
+	///
+	RebaseInteractiveContinue,
+	///
+	RebaseInteractiveAbort,
+	///
+	RebaseInteractiveSkip,
+	///
 	PopupStashing(StashingOptions),
 	///
 	TabSwitchStatus,

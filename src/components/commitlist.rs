@@ -21,9 +21,7 @@ use crate::{
 use anyhow::Result;
 use asyncgit::sync::branch::checkout_branch_cmd;
 use asyncgit::sync::{
-	checkout_commit, cherrypick, filter_by_path, get_commit_info,
-	get_head, BranchDetails, BranchInfo, CommitId, LogWalkerFilter,
-	RepoPathRef, Tags,
+	self, checkout_commit, cherrypick, filter_by_path, get_commit_info, get_head, BranchDetails, BranchInfo, CommitId, LogWalkerFilter, RepoPathRef, RepoState, Tags
 };
 
 use chrono::{DateTime, Local};
@@ -1047,6 +1045,8 @@ impl CommitList {
 			if let Some(r) = self.try_handle_combo_event(k) {
 				return Ok(r);
 			}
+			let git_state = sync::repo_state(&self.repo.borrow())
+				.unwrap_or(RepoState::Clean);
 			let selection_changed =
 				if key_match(k, self.key_config.keys.move_up) {
 					self.move_selection(ScrollType::Up)?
@@ -1073,6 +1073,37 @@ impl CommitList {
 					self.key_config.keys.log_mark_commit,
 				) {
 					self.mark();
+					true
+				} else if key_match(
+					k,
+					self.key_config.keys.rebase_interactive,
+				) && git_state == RepoState::Clean {
+					if let Some(id) = self.get_last_selected_commit() {
+						let base: CommitId = asyncgit::sync::parent_ids(
+							&self.repo.borrow(),
+							*id,
+						)
+						.unwrap()[0];
+						self.queue.push(InternalEvent::RebaseInteractiveWithEditor(base));
+					}
+					true
+				} else if key_match(
+					k,
+					self.key_config.keys.rebase_continue,
+				) && git_state == RepoState::Rebase {
+					self.queue.push(InternalEvent::RebaseInteractiveContinue);
+					true
+				} else if key_match(
+					k,
+					self.key_config.keys.rebase_skip,
+				) && git_state == RepoState::Rebase {
+					self.queue.push(InternalEvent::RebaseInteractiveSkip);
+					true
+				} else if key_match(
+					k,
+					self.key_config.keys.rebase_abort,
+				) && git_state == RepoState::Rebase {
+					self.queue.push(InternalEvent::RebaseInteractiveAbort);
 					true
 				} else if key_match(
 					k,
@@ -1556,6 +1587,28 @@ impl Component for CommitList {
 			strings::commands::filter_msg(&self.key_config),
 			true,
 			self.combo_state == KeyComboState::FilterInit,
+		));
+		let git_state = sync::repo_state(&self.repo.borrow())
+			.unwrap_or(RepoState::Clean);
+		out.push(CommandInfo::new(
+			strings::commands::rebase_interactive(&self.key_config),
+			self.is_list_focused() && git_state == RepoState::Clean,
+			self.is_list_focused() && git_state == RepoState::Clean,
+		));
+		out.push(CommandInfo::new(
+			strings::commands::abort_rebase(&self.key_config),
+			git_state == RepoState::Rebase,
+			git_state == RepoState::Rebase,
+		));
+		out.push(CommandInfo::new(
+			strings::commands::continue_rebase(&self.key_config),
+			git_state == RepoState::Rebase,
+			git_state == RepoState::Rebase,
+		));
+		out.push(CommandInfo::new(
+			strings::commands::skip_rebase(&self.key_config),
+			git_state == RepoState::Rebase,
+			git_state == RepoState::Rebase,
 		));
 
 		if self.combo_state == KeyComboState::Empty {
