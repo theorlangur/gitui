@@ -520,10 +520,12 @@ impl App {
 					}
 					ExternalEditorRequest::RebaseInteractive(commit_id) => {
 						rebase_commits_interactive_with_editor(&self.repo.borrow().gitpath().to_str().unwrap(), commit_id)?;
+						self.revlog.trigger_branch_update();
 						Ok(())
 					}
 					ExternalEditorRequest::RebaseInteractiveContinue => {
 						rebase_commits_continue_with_editor(&self.repo.borrow().gitpath().to_str().unwrap())?;
+						self.revlog.trigger_branch_update();
 						Ok(())
 					}
 				};

@@ -119,7 +119,8 @@ impl RevlogExtern {
 		}
 	}
 
-	fn trigger_branch_update(&mut self) {
+	///
+	pub fn trigger_branch_update(&mut self) {
 		self.git_local_branches.spawn(AsyncBranchesJob::new(
 			self.repo.borrow().clone(),
 			true,
