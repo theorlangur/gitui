@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "(OSX) Launch",
+            "name": "Launch",
             "type": "codelldb",
             "request": "launch",
             "program": "${workspaceFolder}/target/debug/gitui",
@@ -10,6 +10,16 @@
             "externalConsole": "true",
             "args": [],
             "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Launch On RepoTest",
+            "type": "codelldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/debug/gitui",
+            "terminal": "external",
+            "externalConsole": "true",
+            "args": [],
+            "cwd": "/home/orlangur/myapps/rust/repotest"
         },
         {
             "name": "Launch Sequence editor",
