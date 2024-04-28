@@ -385,6 +385,38 @@ pub fn rebase_drop_commits(
 }
 
 ///
+pub fn rebase_fixup_commits(
+	repo: &str,
+	commits: Vec<&CommitId>,
+	base: &CommitId,
+) -> Result<()> {
+	let hashed_commits = commits
+		.iter()
+		.map(|i| i.to_string())
+		.collect::<HashSet<String>>();
+	rebase_interactive(
+		repo,
+		base.to_string().as_str(),
+		|todo_file| {
+			let rebase_commits: Vec<_> =
+				parse_rebase_todo(todo_file)?
+					.into_iter()
+					.map(|i| {
+						if hashed_commits.contains(&i.full_hash) {
+							i.change_op(InteractiveOperation::Fixup)
+						} else {
+							i
+						}
+					})
+					.collect();
+			write_rebase_todo(todo_file, rebase_commits)?;
+			Ok(())
+		},
+	)?;
+	Ok(())
+}
+
+///
 pub enum InteractiveOperation {
 	///
 	Pick,

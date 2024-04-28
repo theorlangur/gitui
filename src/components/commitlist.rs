@@ -210,6 +210,10 @@ impl CommitList {
 						self.branches_update_needed = true;
 						self.drop_marked()
 					}
+					LocalEvent::Confirmed(ref s) if s == "fixup" => {
+						self.branches_update_needed = true;
+						self.fixup_marked()
+					}
 					LocalEvent::PickFile(p) => {
 						self.update_path_filter(p);
 					}
@@ -353,6 +357,41 @@ impl CommitList {
 			}
 		}
 		self.marked.clear();
+		self.queue.push(InternalEvent::Update(NeedsUpdate::ALL));
+	}
+
+	fn fixup_marked(&mut self) {
+		let oldest_commit = self
+			.marked
+			.iter()
+			.max_by(|x, y| x.0.cmp(&y.0))
+			.unwrap()
+			.1
+			.clone();
+		let oldest_to_use: CommitId = asyncgit::sync::parent_ids(
+			&self.repo.borrow(),
+			oldest_commit,
+		)
+		.unwrap()[0];
+		let base: CommitId = asyncgit::sync::parent_ids(
+			&self.repo.borrow(),
+			oldest_to_use,
+		)
+		.unwrap()[0];
+		let list: Vec<_> = self.marked.iter().map(|i| &i.1).collect();
+		if let Err(e) =
+			asyncgit::sync::extern_git::rebase_fixup_commits(
+				self.repo.borrow().gitpath().to_str().unwrap(),
+				list,
+				&base,
+			) {
+			self.queue.push(InternalEvent::ShowErrorMsg(format!(
+				"Dropping commits failed: {}",
+				e
+			)));
+		} else {
+			self.marked.clear();
+		}
 		self.queue.push(InternalEvent::Update(NeedsUpdate::ALL));
 	}
 
@@ -1134,6 +1173,33 @@ impl CommitList {
 					true
 				} else if key_match(
 					k,
+					self.key_config.keys.rebase_fixup_marked,
+				) {
+					if self.marked.is_empty() {
+						self.mark();
+					}
+					if self.marked.is_empty() {
+						self.queue.push(InternalEvent::ShowErrorMsg(
+							String::from(
+								"No commits selected to fixup",
+							),
+						));
+					} else {
+						self.queue.push(
+							InternalEvent::ConfirmCustom(
+								CustomConfirmData {
+									title: "FixUp commits?"
+										.to_string(),
+									msg: self.get_marked_summary(),
+									confirm: "fixup".to_string(),
+									q: self.local_queue.clone(),
+								},
+							),
+						);
+					}
+					true
+				} else if key_match(
+					k,
 					self.key_config.keys.cherrypick,
 				) {
 					if self.marked.is_empty() {
@@ -1610,8 +1676,13 @@ impl Component for CommitList {
 			git_state == RepoState::Rebase,
 			git_state == RepoState::Rebase,
 		));
+		out.push(CommandInfo::new(
+			strings::commands::rebase_fixup(&self.key_config),
+			self.is_list_focused(),
+			self.is_list_focused()
+		));
 
-		if self.combo_state == KeyComboState::Empty {
+		if self.combo_state == KeyComboState::Empty && git_state != RepoState::Rebase {
 			CommandBlocking::PassingOn
 		} else {
 			CommandBlocking::Blocking

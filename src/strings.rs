@@ -1154,6 +1154,19 @@ pub mod commands {
 		)
 	}
 
+	pub fn rebase_fixup(
+		key_config: &SharedKeyConfig,
+	) -> CommandText {
+		CommandText::new(
+			format!(
+				"FixUp selected [{}]",
+				key_config.get_hint(key_config.keys.rebase_fixup_marked),
+			),
+			"fixup selected commits into their parents",
+			CMD_GROUP_GENERAL,
+		)
+	}
+
 	pub fn abort_rebase(key_config: &SharedKeyConfig) -> CommandText {
 		CommandText::new(
 			format!(
