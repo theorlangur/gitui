@@ -1656,30 +1656,32 @@ impl Component for CommitList {
 		));
 		let git_state = sync::repo_state(&self.repo.borrow())
 			.unwrap_or(RepoState::Clean);
+		let rebase_active = git_state == RepoState::Rebase;
+		let is_clean = git_state == RepoState::Clean;
 		out.push(CommandInfo::new(
 			strings::commands::rebase_interactive(&self.key_config),
-			self.is_list_focused() && git_state == RepoState::Clean,
-			self.is_list_focused() && git_state == RepoState::Clean,
+			self.is_list_focused() && is_clean,
+			self.is_list_focused() && is_clean,
 		));
 		out.push(CommandInfo::new(
 			strings::commands::abort_rebase(&self.key_config),
-			git_state == RepoState::Rebase,
-			git_state == RepoState::Rebase,
+			rebase_active,
+			rebase_active,
 		));
 		out.push(CommandInfo::new(
 			strings::commands::continue_rebase(&self.key_config),
-			git_state == RepoState::Rebase,
-			git_state == RepoState::Rebase,
+			rebase_active,
+			rebase_active,
 		));
 		out.push(CommandInfo::new(
 			strings::commands::skip_rebase(&self.key_config),
-			git_state == RepoState::Rebase,
-			git_state == RepoState::Rebase,
+			rebase_active,
+			rebase_active,
 		));
 		out.push(CommandInfo::new(
 			strings::commands::rebase_fixup(&self.key_config),
-			self.is_list_focused(),
-			self.is_list_focused()
+			self.is_list_focused() && is_clean,
+			self.is_list_focused() && is_clean
 		));
 
 		if self.combo_state == KeyComboState::Empty && git_state != RepoState::Rebase {
